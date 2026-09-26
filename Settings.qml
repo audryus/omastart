@@ -16,11 +16,15 @@ Item {
   property var menu: null
 
   property string section: "general"
-  onSectionChanged: if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
+  onSectionChanged: {
+    if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
+    else if (section === "uninstall") { uninstallPage.refresh(); uninstallPage.focusSearch() }
+  }
   readonly property var sections: [
     { id: "general", label: "General" },
     { id: "defaults", label: "Defaults" },
-    { id: "printers", label: "Printers" }
+    { id: "printers", label: "Printers" },
+    { id: "uninstall", label: "Uninstall" }
   ]
 
   signal requestClose()
@@ -217,7 +221,13 @@ Item {
               anchors.fill: parent
               anchors.leftMargin: Style.space(12)
               visible: root.section === "printers"
-              onInstallStarted: root.requestClose()
+            }
+
+            Uninstall {
+              id: uninstallPage
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              visible: root.section === "uninstall"
             }
           }
         }
