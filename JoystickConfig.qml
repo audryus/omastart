@@ -18,6 +18,10 @@ Item {
   property string pluginDir: ""
   property string deviceNode: ""
   property string deviceName: ""
+  // Exact kernel name (trailing spaces kept): RetroArch matches
+  // input_device against EVIOCGNAME, and the stock profiles preserve
+  // the padding — a trimmed name never matches.
+  property string deviceRawName: ""
   property string deviceVid: ""
   property string devicePid: ""
 
@@ -52,7 +56,14 @@ Item {
   readonly property string scriptPath: root.pluginDir + "/joybind.py"
   readonly property string cfgDir: root.pluginDir + "/autoconfig"
 
+  // Local file carries the custom label (distinct per stick); the
+  // installed copy must carry the kernel name or RetroArch never matches.
   function sanitizedName() {
+    var s = String(root.storedLabel || root.deviceName || "joystick").trim().replace(/[\/\\]/g, "_")
+    return s || "joystick"
+  }
+
+  function kernelFileName() {
     var s = String(root.deviceName || "joystick").trim().replace(/[\/\\]/g, "_")
     return s || "joystick"
   }
@@ -80,7 +91,10 @@ Item {
 
   function bindAll() {
     var list = root.targets()
-    if (list.length === 0) return
+    if (list.length === 0) {
+      root.status = "Preset failed to load — reopen the window."
+      return
+    }
     root.bindStep(0)
   }
 
@@ -94,6 +108,12 @@ Item {
   function bindStep(i) {
     var list = root.targets()
     if (i < 0 || i >= list.length) { root.finishBinding(); return }
+    if (!root.deviceNode) {
+      root.status = "No device selected — reopen from Configure."
+      root.bindIndex = -1
+      root.currentKey = ""
+      return
+    }
     root.bindIndex = i
     root.bindToken += 1
     root.currentKey = list[i].key
@@ -125,6 +145,15 @@ Item {
     root.status = "Done — review and Save."
   }
 
+  // Axis targets only accept their own direction (l_y_minus wants -N);
+  // plain keys take buttons or either axis side.
+  function directionOk(key, kind, value) {
+    if (kind !== "axis") return true
+    if (key.substring(key.length - 6) === "_minus") return value.charAt(0) === "-"
+    if (key.substring(key.length - 5) === "_plus") return value.charAt(0) === "+"
+    return true
+  }
+
   function applyCapture(token, line) {
     if (token !== root.bindToken) return
     var mBtn = line.match(/^BTN\s+(\d+)/)
@@ -132,6 +161,11 @@ Item {
     var list = root.targets()
     var key = root.currentKey
     if (!key) return
+    if ((mBtn || mAxis) && !root.directionOk(key, mAxis ? "axis" : "btn", mAxis ? mAxis[1] : "")) {
+      root.status = "Wrong direction — move the opposite way…"
+      root.bindStep(root.bindIndex)
+      return
+    }
     if (mBtn) {
       var next = {}
       for (var k in root.mapping) next[k] = root.mapping[k]
@@ -159,7 +193,13 @@ Item {
   function cfgText() {
     var lines = []
     lines.push("input_driver = \"udev\"")
-    lines.push("input_device = \"" + String(root.deviceName || "").trim() + "\"")
+    var exactName = String(root.deviceRawName || "")
+    if (!exactName) exactName = String(root.deviceName || "").trim()
+    lines.push("input_device = \"" + exactName + "\"")
+    // Marker AND proof: the in-game OSD shows this when OUR profile wins.
+    // Shadow detection also keys off it to tell our copies apart.
+    var pretty = root.storedLabel || String(root.deviceName || "").trim()
+    lines.push("input_device_display_name = \"OmaStart " + pretty + "\"")
     var vid = root.hexDec(root.deviceVid)
     var pid = root.hexDec(root.devicePid)
     if (vid) lines.push("input_vendor_id = \"" + vid + "\"")
@@ -174,9 +214,11 @@ Item {
     for (var j = 0; j < keys.length; j++) {
       var m = root.mapping[keys[j]]
       if (!m) continue
-      if (m.kind === "axis") lines.push("input_" + keys[j] + "_axis = \"" + m.value + "\"")
-      else lines.push("input_" + keys[j] + "_btn = \"" + m.value + "\"")
-      lines.push("input_" + keys[j] + "_label = \"" + (labels[keys[j]] || keys[j]) + "\"")
+      // Descriptors must carry the same _btn/_axis suffix as the mapping
+      // (upstream README), otherwise RetroArch ignores the label.
+      var suffix = m.kind === "axis" ? "_axis" : "_btn"
+      lines.push("input_" + keys[j] + suffix + " = \"" + m.value + "\"")
+      lines.push("input_" + keys[j] + suffix + "_label = \"" + (labels[keys[j]] || keys[j]) + "\"")
     }
     return lines.join("\n") + "\n"
   }
@@ -186,24 +228,52 @@ Item {
     var dir = root.cfgDir
     var path = root.cfgPath()
     // Two-phase: temp file first so a stray quote can never truncate the
-    // profile; then move into place.
-    saveProc.command = ["bash", "-lc", "mkdir -p " + Util.shellQuote(dir)
+    // profile; then move into place. The core remap goes alongside.
+    var cmd = "mkdir -p " + Util.shellQuote(dir)
       + " && printf '%s' " + Util.shellQuote(root.cfgText())
       + " > " + Util.shellQuote(dir + "/.tmp.cfg")
-      + " && mv " + Util.shellQuote(dir + "/.tmp.cfg") + " " + Util.shellQuote(path)]
+      + " && mv " + Util.shellQuote(dir + "/.tmp.cfg") + " " + Util.shellQuote(path)
+    var remap = root.buildRemap()
+    if (remap) {
+      cmd += " && mkdir -p " + Util.shellQuote(root.remapDir())
+        + " && printf '%s' " + Util.shellQuote(remap)
+        + " > " + Util.shellQuote(root.remapPath)
+    }
+    saveProc.command = ["bash", "-lc", cmd]
     saveProc.running = true
+  }
+
+  function remapDir() {
+    var path = root.remapPath
+    var slash = path.lastIndexOf("/")
+    return slash > 0 ? path.substring(0, slash) : Quickshell.env("HOME")
   }
 
   Process {
     id: saveProc
     onExited: function(exitCode) {
-      if (exitCode === 0) {
-        root.dirty = false
-        if (root.store && root.stickKey) root.store.setPreset(root.stickKey, root.presetId)
-        root.status = "Saved to " + root.cfgPath()
-      } else {
+      if (exitCode !== 0) {
         root.status = "Save failed (exit " + exitCode + ")."
+        return
       }
+      root.dirty = false
+      if (root.store && root.stickKey) root.store.setPreset(root.stickKey, root.presetId)
+      // Install into RetroArch's own autoconfig dir (system path, hence
+      // pkexec): without this step RetroArch never loads the profile.
+      // Installed filename follows the kernel name (what RA matches on).
+      installProc.command = ["bash", "-lc",
+        "pkexec cp " + Util.shellQuote(root.cfgPath()) + " " + Util.shellQuote("/usr/share/libretro/autoconfig/udev/" + root.kernelFileName() + ".cfg")]
+      installProc.running = true
+      var extra = root.remapTemplate ? " + core remap" : ""
+      root.status = "Saved locally" + extra + " — installing into RetroArch…"
+    }
+  }
+
+  Process {
+    id: installProc
+    onExited: function(exitCode) {
+      if (exitCode === 0) root.status = "Installed — restart the game to load it."
+      else root.status = "Saved locally, RetroArch install failed (exit " + exitCode + ")."
     }
   }
 
@@ -222,6 +292,47 @@ Item {
       }
       root.applyCapture(token, last)
     }
+  }
+
+  // Remap template (the user's hand-tuned file): our bound keys replace
+  // its input_player1_* lines, boilerplate (turbo etc.) is preserved.
+  // Empty when the template does not exist — then no remap is written.
+  readonly property string remapTemplatePath: Quickshell.env("HOME") + "/.config/retroarch/config/remaps/Mupen64Plus-Next/tuyi.rmp.bak"
+  readonly property string remapPath: Quickshell.env("HOME") + "/.config/retroarch/config/remaps/Mupen64Plus-Next/Mupen64Plus-Next.rmp"
+  property string remapTemplate: ""
+
+  function buildRemap() {
+    if (!root.remapTemplate) return ""
+    // Player btn/axis overrides come ONLY from our mapping (a stale line
+    // pointing at a nonexistent button would silently kill that input,
+    // which is what the dead 20-23 lines did); all other boilerplate
+    // (turbo, analog_dpad_mode, ports…) is preserved as-is.
+    var out = []
+    var lines = root.remapTemplate.split("\n")
+    for (var j = 0; j < lines.length; j++) {
+      var hit = lines[j].match(/^input_player1_([a-z0-9_]+?)_(btn|axis)\s*=/)
+      if (hit) continue
+      out.push(lines[j])
+    }
+    var keys = []
+    for (var k in root.mapping) keys.push(k)
+    keys.sort()
+    for (var l = 0; l < keys.length; l++) {
+      var entry = root.mapping[keys[l]]
+      if (!entry) continue
+      if (entry.kind === "axis") out.push("input_player1_" + keys[l] + "_axis = \"" + entry.value + "\"")
+      else out.push("input_player1_" + keys[l] + "_btn = \"" + entry.value + "\"")
+    }
+    return out.join("\n")
+  }
+
+  FileView {
+    id: remapTemplateFile
+    path: root.remapTemplatePath
+    watchChanges: false
+    printErrors: false
+    onLoaded: root.remapTemplate = text()
+    onLoadFailed: root.remapTemplate = ""
   }
 
   // Prefill from an existing profile for this stick, if any.
@@ -250,6 +361,13 @@ Item {
     root.bindIndex = -1
     root.currentKey = ""
     root.status = ""
+    // Reopen on the stored preset instead of always falling to megadrive.
+    var preset = "megadrive"
+    if (root.store && root.stickKey) {
+      var entry = root.store.identityFor(root.stickKey)
+      if (entry && entry.preset) preset = entry.preset
+    }
+    root.presetId = preset
   }
 
   onOpenChanged: if (open) root.resetForDevice()
@@ -409,11 +527,15 @@ Item {
             id: presetLoader
             width: 320
             height: parent.height
+            // NOTE: a plain relative "presets/X.qml" resolves through the
+            // qs: module mapping and fails with `module "qs.Commons" is not
+            // installed` (seen in preserved logs); Qt.resolvedUrl gives a
+            // real file:// URL and loads with normal import paths.
             source: {
               for (var i = 0; i < root.presets.length; i++) {
-                if (root.presets[i].id === root.presetId) return root.presets[i].file
+                if (root.presets[i].id === root.presetId) return Qt.resolvedUrl(root.presets[i].file)
               }
-              return root.presets[0].file
+              return Qt.resolvedUrl(root.presets[0].file)
             }
             onLoaded: {
               if (item) item.activeKey = Qt.binding(function() { return root.currentKey })

@@ -14,6 +14,10 @@ Item {
     { key: "right", label: "D-Pad Right" },
     { key: "b", label: "A" },
     { key: "y", label: "B" },
+    // Canonical duplicate (Hyperkin profile): press the SAME physical B
+    // button again — it fills retropad A too, otherwise B does nothing
+    // in-game and menu nav breaks.
+    { key: "a", label: "B (press again)" },
     { key: "l", label: "L" },
     { key: "r", label: "R" },
     { key: "l2", label: "Z" },

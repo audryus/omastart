@@ -25,13 +25,91 @@ Item {
     if (scanProc.running) return
     scanProc.collected = ""
     scanProc.running = true
+    root.scanShadows()
   }
+
+  // ---- stock-profile shadowing -------------------------------------
+  // A same-name/vidpid .cfg elsewhere (e.g. the padded stock profile)
+  // outscores ours, so RetroArch silently ignores our file. Ours carry
+  // an "OmaStart" display_name marker and are excluded from the check.
+  property var shadows: ({})
+
+  function normDevice(value) {
+    return String(value || "").toLowerCase().replace(/\s+/g, " ").replace(/^ +| +$/g, "")
+  }
+
+  function scanShadows() {
+    if (shadowProc.running) return
+    shadowProc.collected = ""
+    shadowProc.running = true
+  }
+
+  function applyShadows() {
+    var cfgs = []
+    var lines = shadowProc.collected.split("\n")
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i]
+      if (line.indexOf("CFG:") !== 0) continue
+      var parts = line.substring(4).split("|")
+      if (parts.length < 4) continue
+      cfgs.push({ path: parts[0], device: parts[1], vidpid: parts[2], ours: parts[3] === "1" })
+    }
+    var next = {}
+    var rows = Array.isArray(root.sticks) ? root.sticks : []
+    for (var j = 0; j < rows.length; j++) {
+      var raw = ""
+      try {
+        var scanLines = scanProc.collected.split("\n")
+        raw = root.rawForNode(scanLines, rows[j].node)
+      } catch (e) { raw = "" }
+      for (var k = 0; k < cfgs.length; k++) {
+        if (cfgs[k].ours) continue
+        var sameDevice = cfgs[k].device !== "" && (cfgs[k].device === raw
+          || (root.normDevice(cfgs[k].device) === root.normDevice(raw)
+            && cfgs[k].vidpid === rows[j].vidpid && rows[j].vidpid !== "" && rows[j].vidpid !== ":"))
+        if (sameDevice) { next[rows[j].key] = cfgs[k].path; break }
+      }
+    }
+    root.shadows = next
+  }
+
+  // Exact raw kernel name for a js node, from the last stick scan.
+  function rawForNode(scanLines, node) {
+    for (var i = 0; i < scanLines.length; i++) {
+      var line = scanLines[i].trim()
+      if (line.indexOf("JS:") !== 0) continue
+      var parts = line.substring(3).split("|")
+      if (parts[0] === node) return parts[7] || ""
+    }
+    return ""
+  }
+
+  function fixShadow(key) {
+    var path = root.shadows[key]
+    if (!path) return
+    // pkexec prompt; package updates may restore the file later.
+    Util.execDetached("pkexec mv " + Util.shellQuote(path) + " " + Util.shellQuote(path + ".bak"))
+    Qt.callLater(root.scanShadows, 3000)
+  }
+
+  Process {
+    id: shadowProc
+    property string collected: ""
+    command: ["bash", "-lc", "for f in /usr/share/libretro/autoconfig/udev/*.cfg ~/.config/retroarch/autoconfig/udev/*.cfg; do [ -f \"$f\" ] || continue; dev=$(grep -m1 -E '^input_device[[:space:]]*=' \"$f\" 2>/dev/null | sed 's/^[^=]*=[[:space:]]*\"\\(.*\\)\".*$/\\1/'); vid=$(grep -m1 -E '^input_vendor_id[[:space:]]*=' \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | head -1); pid=$(grep -m1 -E '^input_product_id[[:space:]]*=' \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | head -1); ours=$(grep -qm1 'OmaStart' \"$f\" 2>/dev/null && echo 1 || echo 0); echo \"CFG:$f|$dev|$vid:$pid|$ours\"; done"]
+    stdout: SplitParser {
+      onRead: function(data) { shadowProc.collected += data + "\n" }
+    }
+    onExited: root.applyShadows()
+  }
+
+  property string configRawName: ""
 
   function configure(row) {
     if (!row || !row.node) return
     var vidpid = String(row.vidpid || "").split(":")
-    root.configKey = String(row.key || "")
     root.configNode = String(row.node)
+    root.configKey = String(row.key || "")
+    root.configRawName = String(row.rawname || row.label || row.node)
     root.configName = String(row.label || row.node)
     root.configVid = vidpid.length > 0 ? vidpid[0] : ""
     root.configPid = vidpid.length > 1 ? vidpid[1] : ""
@@ -66,6 +144,22 @@ Item {
     var entry = root.identityFor(row.key)
     if (entry && entry.preset && root.presetShort[entry.preset]) return root.presetShort[entry.preset]
     return ""
+  }
+
+  function sanitizeFile(value) {
+    var s = String(value || "joystick").trim().replace(/[\/\\]/g, "_")
+    return s || "joystick"
+  }
+
+  // Install this stick's local profile as THE RetroArch profile for the
+  // device (pkexec prompt): for identical twins sharing one kernel name,
+  // the last one modeled wins for both.
+  function makeModel(row) {
+    if (!row) return
+    var src = root.fsPluginDir + "/autoconfig/" + root.sanitizeFile(root.displayLabel(row)) + ".cfg"
+    var dest = "/usr/share/libretro/autoconfig/udev/" + root.sanitizeFile(row.label) + ".cfg"
+    Util.execDetached("pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest))
+    Qt.callLater(root.scanShadows, 3000)
   }
 
   function setLabel(key, label) {
@@ -120,6 +214,7 @@ Item {
     bar: root.bar
     store: root
     stickKey: root.configKey
+    deviceRawName: root.configRawName
     pluginDir: String(Qt.resolvedUrl("joybind.py")).replace(/^file:\/\//, "").replace(/\/joybind\.py$/, "")
     deviceNode: root.configNode
     deviceName: root.configName
@@ -162,9 +257,13 @@ Item {
         label: parts[1] || parts[0],
         detail: detail.join("  ·  "),
         vidpid: parts[2] || "",
-        baseKey: root.stickBaseKey(parts[2] || "", parts[5] || "", parts[7] || "", parts[6] || "")
+        rawname: parts[7] || "",
+        baseKey: root.stickBaseKey(parts[2] || "", parts[5] || "", parts[8] || "", parts[6] || "")
       })
     }
+    // Shadow data needs fresh stick rows; the shadow scan may have won
+    // the race with empty hands, so run it again now (cheap, local).
+    root.scanShadows()
     // Deterministic numbering for identical units (sorted by node).
     rows.sort(function(a, b) { return a.node < b.node ? -1 : (a.node > b.node ? 1 : 0) })
     var seen = {}
@@ -179,7 +278,7 @@ Item {
   Process {
     id: scanProc
     property string collected: ""
-    command: ["bash", "-lc", "for js in /dev/input/js*; do [ -e \"$js\" ] || continue; dev=$(basename \"$js\"); base=/sys/class/input/$dev/device; name=$(tr -d '\\0' < $base/name 2>/dev/null | xargs); d=$(readlink -f $base); vid=''; pid=''; mfg=''; prod=''; iface=''; serial=''; phys=''; child=''; for i in $(seq 1 8); do if [ -f \"$d/idVendor\" ]; then vid=$(cat \"$d/idVendor\"); pid=$(cat \"$d/idProduct\"); mfg=$(cat \"$d/manufacturer\" 2>/dev/null | xargs); prod=$(cat \"$d/product\" 2>/dev/null | xargs); serial=$(cat \"$d/serial\" 2>/dev/null | xargs); iface=$(basename \"$child\" | sed 's/.*://'); break; fi; child=\"$d\"; d=$(dirname \"$d\"); done; if [ -z \"$iface\" ]; then phys=$(tr -d '\\0' < $base/phys 2>/dev/null | xargs); fi; echo \"JS:$js|$name|$vid:$pid|$mfg|$prod|$iface|$phys|$serial\"; done"]
+    command: ["bash", "-lc", "for js in /dev/input/js*; do [ -e \"$js\" ] || continue; dev=$(basename \"$js\"); base=/sys/class/input/$dev/device; raw=$(tr -d '\\0\\n' < $base/name 2>/dev/null); name=$(echo \"$raw\" | xargs); d=$(readlink -f $base); vid=''; pid=''; mfg=''; prod=''; iface=''; serial=''; phys=''; child=''; for i in $(seq 1 8); do if [ -f \"$d/idVendor\" ]; then vid=$(cat \"$d/idVendor\"); pid=$(cat \"$d/idProduct\"); mfg=$(cat \"$d/manufacturer\" 2>/dev/null | xargs); prod=$(cat \"$d/product\" 2>/dev/null | xargs); serial=$(cat \"$d/serial\" 2>/dev/null | xargs); iface=$(basename \"$child\" | sed 's/.*://'); break; fi; child=\"$d\"; d=$(dirname \"$d\"); done; if [ -z \"$iface\" ]; then phys=$(tr -d '\\0' < $base/phys 2>/dev/null | xargs); fi; echo \"JS:$js|$name|$vid:$pid|$mfg|$prod|$iface|$phys|$raw|$serial\"; done"]
     stdout: SplitParser {
       onRead: function(data) { scanProc.collected += data + "\n" }
     }
@@ -233,77 +332,113 @@ Item {
           model: root.sticks
           delegate: BorderSurface {
             required property var modelData
+            readonly property bool hasPreset: root.displayPreset(modelData) !== ""
+            readonly property bool shadowed: !!root.shadows[modelData.key]
             width: sticksCol.width
-            height: Math.max(Style.space(44), stickLabel.implicitHeight + Style.space(14))
+            height: stickCard.implicitHeight + Style.space(16)
             radius: Style.cornerRadius
             color: "transparent"
             borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
 
-            Text {
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(36)
-              horizontalAlignment: Text.AlignHCenter
-              textFormat: Text.PlainText
-              text: "\uf11b"
-              color: Color.foreground
-              font.family: Style.font.family
-              font.pixelSize: Style.font.iconLarge
-            }
-
             Column {
-              id: stickLabel
+              id: stickCard
               anchors.left: parent.left
-              anchors.right: configButton.left
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(36)
-              anchors.rightMargin: Style.space(8)
-              spacing: 2
-
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: root.displayLabel(modelData)
-                color: Color.foreground
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.weight: Font.Medium
-                elide: Text.ElideRight
-              }
-
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: root.displayPreset(modelData) || "not configured yet"
-                color: root.displayPreset(modelData) ? Color.accent : Color.foreground
-                opacity: root.displayPreset(modelData) ? 1.0 : 0.55
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.weight: root.displayPreset(modelData) ? Font.Medium : Font.Normal
-                elide: Text.ElideRight
-              }
-
-              Text {
-                width: parent.width
-                visible: (modelData.detail || "") !== ""
-                textFormat: Text.PlainText
-                text: modelData.detail || ""
-                color: Color.foreground
-                opacity: 0.55
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                elide: Text.ElideRight
-              }
-            }
-
-            Button {
-              id: configButton
               anchors.right: parent.right
-              anchors.rightMargin: Style.space(6)
               anchors.verticalCenter: parent.verticalCenter
-              text: "Configure"
-              bordered: true
-              onClicked: root.configure(modelData)
+              anchors.leftMargin: Style.space(10)
+              anchors.rightMargin: Style.space(10)
+              spacing: Style.space(8)
+
+              Row {
+                width: parent.width
+                spacing: Style.space(4)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Style.space(30)
+                  horizontalAlignment: Text.AlignHCenter
+                  textFormat: Text.PlainText
+                  text: "\uf11b"
+                  color: Color.foreground
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.iconLarge
+                }
+
+                Column {
+                  width: parent.width - Style.space(30) - Style.space(4)
+                  spacing: 2
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: root.displayLabel(modelData)
+                    color: Color.foreground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    font.weight: Font.Medium
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: root.displayPreset(modelData) || "not configured yet"
+                    color: root.displayPreset(modelData) ? Color.accent : Color.foreground
+                    opacity: root.displayPreset(modelData) ? 1.0 : 0.55
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    font.weight: root.displayPreset(modelData) ? Font.Medium : Font.Normal
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    width: parent.width
+                    visible: (modelData.detail || "") !== ""
+                    textFormat: Text.PlainText
+                    text: modelData.detail || ""
+                    color: Color.foreground
+                    opacity: 0.55
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+                  }
+                }
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Button {
+                  text: "Configure"
+                  bordered: true
+                  onClicked: root.configure(modelData)
+                }
+
+                Button {
+                  visible: hasPreset
+                  text: "Model"
+                  bordered: true
+                  onClicked: root.makeModel(modelData)
+                }
+
+                Button {
+                  visible: shadowed
+                  text: "Fix stock"
+                  bordered: true
+                  onClicked: root.fixShadow(modelData.key)
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                    PanelToolTip {
+                      visible: parent.containsMouse
+                      text: "A stock profile shadows ours and RetroArch ignores it. Click to move it aside (.bak)."
+                    }
+                  }
+                }
+              }
             }
           }
         }
