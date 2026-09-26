@@ -15,9 +15,13 @@ Item {
   property var installed: []
 
   signal requestClose()
+  signal installLaunched()
 
   property var found: []
   property bool scanning: false
+
+  // Shared with Printers.qml Refresh (same scan, parsed the same way).
+  readonly property string scanCommand: "echo '@@DRV'; driverless list 2>/dev/null; for t in _ipp._tcp _ipps._tcp _printer._tcp _pdl-datastream._tcp; do echo \"@@AVAHI $t\"; timeout 8 avahi-browse -rt \"$t\" 2>/dev/null; done"
 
   function refresh() {
     if (scanProc.running) return
@@ -55,12 +59,48 @@ Item {
   // (LPD, e.g. old Epsons with no IPP at all) -> lpd://addr/queue,
   // _pdl-datastream._tcp (JetDirect) -> socket://addr:port.
   function avahiUri(type, rec) {
-    if (!rec.address) return ""
-    if (type === "_ipp._tcp") return "ipp://" + rec.address + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
-    if (type === "_ipps._tcp") return "ipps://" + rec.address + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
-    if (type === "_printer._tcp") return "lpd://" + rec.address + "/" + (txtField(rec.txt, "rp") || "auto")
-    if (type === "_pdl-datastream._tcp") return "socket://" + rec.address + ":" + (rec.port || "9100")
+    // Prefer the .local hostname: it survives DHCP IP changes, plain IPs
+    // go stale (which is what Refresh is for).
+    var host = rec.hostname || rec.address
+    if (!host) return ""
+    if (type === "_ipp._tcp") return "ipp://" + host + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
+    if (type === "_ipps._tcp") return "ipps://" + host + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
+    if (type === "_printer._tcp") return "lpd://" + host + "/" + (txtField(rec.txt, "rp") || "auto")
+    if (type === "_pdl-datastream._tcp") return "socket://" + host + ":" + (rec.port || "9100")
     return ""
+  }
+
+  // CUPS queue name: letters/digits/_/-, unique among installed printers.
+  function suggestName(want, taken) {
+    var base = String(want || "printer").replace(/[^A-Za-z0-9_-]/g, "_").replace(/^[^A-Za-z]+/, "")
+    if (!base) base = "printer"
+    var name = base
+    var n = 2
+    while (taken[name]) { name = base + "-" + n; n += 1 }
+    return name
+  }
+
+  function takenNames() {
+    var set = {}
+    var list = Array.isArray(root.installed) ? root.installed : []
+    for (var i = 0; i < list.length; i++) set[String(list[i].name)] = true
+    return set
+  }
+
+  // Traditional pattern (install.*): privileged work runs in a floating
+  // terminal so sudo prompts there. ipp/ipps get the driverless model,
+  // anything else a raw queue.
+  function install(row) {
+    if (!row || !row.uri) return
+    var queue = suggestName(row.name, root.takenNames())
+    var model = (row.uri.indexOf("ipp://") === 0 || row.uri.indexOf("ipps://") === 0) ? "everywhere" : "raw"
+    var cmd = "omarchy-launch-floating-terminal-with-presentation "
+      + Util.shellQuote("sudo lpadmin -p " + Util.shellQuote(queue) + " -E -v " + Util.shellQuote(row.uri) + " -m " + model)
+    installingUri = row.uri
+    // Our overlays sit above the floating terminal: get out of the way
+    // first (handled up the chain), then launch the installer.
+    root.installLaunched()
+    Util.execDetached(cmd)
   }
 
   function avahiName(rec) {
@@ -131,12 +171,15 @@ Item {
     }
     root.found = rows
     root.scanning = false
+    if (root.installingUri && !rows.some(function(r) { return r.uri === root.installingUri })) root.installingUri = ""
   }
+
+  property string installingUri: ""
 
   Process {
     id: scanProc
     property string collected: ""
-    command: ["bash", "-lc", "echo '@@DRV'; driverless list 2>/dev/null; for t in _ipp._tcp _ipps._tcp _printer._tcp _pdl-datastream._tcp; do echo \"@@AVAHI $t\"; timeout 8 avahi-browse -rt \"$t\" 2>/dev/null; done"]
+    command: ["bash", "-lc", root.scanCommand]
     stdout: SplitParser {
       onRead: function(data) { scanProc.collected += data + "\n" }
     }
@@ -239,10 +282,10 @@ Item {
               anchors.right: parent.right
               anchors.rightMargin: Style.space(6)
               anchors.verticalCenter: parent.verticalCenter
-              text: "Install"
+              text: root.installingUri === modelData.uri ? "Installing…" : "Install"
               bordered: true
-              // Not wired yet: install comes later.
-              onClicked: console.log("[audryus.menu] install not implemented: " + modelData.uri)
+              enabled: root.installingUri === "" || root.installingUri === modelData.uri
+              onClicked: root.install(modelData)
             }
           }
         }

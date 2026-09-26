@@ -217,6 +217,7 @@ Item {
               anchors.fill: parent
               anchors.leftMargin: Style.space(12)
               visible: root.section === "printers"
+              onInstallStarted: root.requestClose()
             }
           }
         }
