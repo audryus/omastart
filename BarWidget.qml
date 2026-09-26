@@ -16,6 +16,7 @@ BarWidget {
 
   property string filterText: ""
   property bool menuOpen: false
+  property bool settingsOpen: false
   onFilterTextChanged: root.updateMenu()
   onActiveMenuChanged: root.updateMenu()
 
@@ -46,6 +47,91 @@ BarWidget {
       search.forceActiveFocus()
       if (search.activeFocus) stop()
     }
+  }
+
+  // Floating settings window (same dir, no import needed). The widget
+  // closes itself when Settings is picked, leaving only this open.
+  Settings {
+    id: settingsWindow
+    open: root.settingsOpen
+    bar: root.bar
+    menu: root
+    onRequestClose: root.settingsOpen = false
+  }
+
+  // Favorite folders (General section): JSON array of absolute paths.
+  property var favorites: []
+  readonly property string favoritesPath: Quickshell.env("HOME") + "/.local/state/omarchy/settings/audryus-menu-favorites.json"
+
+  // Last path segment only (e.g. valid8); full path goes to the tooltip.
+  function shortFavorite(path) {
+    var parts = String(path || "").split("/").filter(function(p) { return p.length > 0 })
+    if (parts.length === 0) return String(path || "")
+    return parts[parts.length - 1]
+  }
+
+  // Static places + divider + favorites. Favorites behave like Work:
+  // left = file manager, middle = default agent, right = terminal.
+  readonly property var placesWithFavorites: {
+    var out = root.places.slice()
+    var favs = Array.isArray(root.favorites) ? root.favorites : []
+    if (favs.length > 0) {
+      out.push({ divider: true })
+      for (var i = 0; i < favs.length; i++) {
+        out.push({
+          label: root.shortFavorite(favs[i]),
+          dir: favs[i],
+          icon: "\uf07b",
+          tip: true,
+          agent: true
+        })
+      }
+    }
+    return out
+  }
+
+  function loadFavorites(text) {
+    var next = []
+    try {
+      var parsed = JSON.parse(String(text || ""))
+      var list = Array.isArray(parsed) ? parsed : []
+      for (var i = 0; i < list.length; i++) {
+        if (typeof list[i] === "string" && list[i]) next.push(list[i])
+      }
+    } catch (e) { }
+    root.favorites = next
+  }
+
+  function saveFavorites() {
+    var json = JSON.stringify(Array.isArray(root.favorites) ? root.favorites : [])
+    var dir = Quickshell.env("HOME") + "/.local/state/omarchy/settings"
+    Util.execDetached("mkdir -p " + Util.shellQuote(dir) + " && printf '%s' " + Util.shellQuote(json) + " > " + Util.shellQuote(root.favoritesPath))
+  }
+
+  function addFavorite(path) {
+    var p = String(path || "").trim()
+    if (!p) return
+    var favs = Array.isArray(root.favorites) ? root.favorites.slice() : []
+    if (favs.indexOf(p) >= 0) return
+    favs.push(p)
+    root.favorites = favs
+    root.saveFavorites()
+  }
+
+  function removeFavorite(path) {
+    var favs = Array.isArray(root.favorites) ? root.favorites : []
+    root.favorites = favs.filter(function(p) { return p !== path })
+    root.saveFavorites()
+  }
+
+  FileView {
+    id: favoritesFile
+    path: root.favoritesPath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.loadFavorites(text())
+    onLoadFailed: root.favorites = []
+    onFileChanged: reload()
   }
 
   // Places for the right pane. Left click = default file manager
@@ -82,7 +168,16 @@ BarWidget {
     var merged = MenuModel.mergeMenuSources(root.defaultSystemItems, root.userSystemItems)
     var rows = System.systemRows(merged.items, merged.itemOrder)
     systemModel.clear()
-    for (var i = 0; i < rows.length; i++) systemModel.append(rows[i])
+    // NOTE: ListModel delegates have no modelData; `id` can't be a role
+    // name either, so expose it as itemId.
+    for (var i = 0; i < rows.length; i++) {
+      systemModel.append({
+        itemId: rows[i].id,
+        label: rows[i].label,
+        icon: rows[i].icon,
+        action: rows[i].action
+      })
+    }
     root.updateMenu()
   }
 
@@ -344,7 +439,7 @@ BarWidget {
           anchors.bottom: parent.bottom
           height: Style.space(32)
           radius: Style.cornerRadius
-          color: Qt.rgba(1, 0, 0, 0.25)
+          color: "transparent"
 
           Row {
             id: footerRow
@@ -355,6 +450,7 @@ BarWidget {
             Repeater {
               model: systemModel
               delegate: Item {
+                required property string itemId
                 required property string label
                 required property string icon
                 required property string action
@@ -387,6 +483,11 @@ BarWidget {
                   anchors.fill: parent
                   cursorShape: Qt.PointingHandCursor
                   onClicked: {
+                    if (itemId === "settings") {
+                      root.close()
+                      root.settingsOpen = true
+                      return
+                    }
                     var cmd = action
                     root.close()
                     if (cmd) Util.execDetached(cmd)
@@ -413,7 +514,7 @@ BarWidget {
             anchors.left: parent.left
             width: parent.width * 0.7
             radius: Style.cornerRadius
-            color: Qt.rgba(0.2, 0, 1, 0.25)
+            color: "transparent"
 
             // Row 1: all apps, grouped A-Z. Search filters only this list.
             Item {
@@ -428,8 +529,7 @@ BarWidget {
 
               Text {
                 id: appsHeader
-                anchors.top: divAppsTop.bottom
-                anchors.topMargin: Style.space(6)
+                anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
                 textFormat: Text.PlainText
@@ -782,7 +882,7 @@ BarWidget {
             anchors.right: parent.right
             width: parent.width * 0.3
             radius: Style.cornerRadius
-            color: Qt.rgba(1, 1, 0, 0.25)
+            color: "transparent"
 
             Column {
               anchors.fill: parent
@@ -790,7 +890,7 @@ BarWidget {
               spacing: Style.space(2)
 
               Repeater {
-                model: root.places
+                model: root.placesWithFavorites
                 delegate: Item {
                   required property var modelData
                   width: parent.width
@@ -850,9 +950,14 @@ BarWidget {
                         root.close()
                         if (mouse.button === Qt.RightButton) root.openTerm(dir)
                         else if (mouse.button === Qt.MiddleButton) {
-                          if (special === "work") root.openAgent(dir)
+                          if (special === "work" || modelData.agent) root.openAgent(dir)
                         } else root.openFm(dir)
                       }
+                    }
+
+                    PanelToolTip {
+                      visible: placeMouse.containsMouse && !!modelData.tip
+                      text: modelData.dir || ""
                     }
                   }
                 }
