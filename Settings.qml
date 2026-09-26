@@ -16,7 +16,7 @@ Item {
   property var menu: null
 
   property string section: "general"
-  onSectionChanged: if (section === "defaults") defaultsPage.refresh()
+  onSectionChanged: if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
   readonly property var sections: [
     { id: "general", label: "General" },
     { id: "defaults", label: "Defaults" }

@@ -26,6 +26,20 @@ Item {
 
   property var rows: []
   property bool evalPending: false
+  property string filter: ""
+  readonly property string query: filter.trim().toLowerCase()
+
+  function focusSearch() { searchField.forceActiveFocus() }
+
+  function rowMatches(row) {
+    if (root.query === "") return true
+    return String(row.label || "").toLowerCase().indexOf(root.query) >= 0
+  }
+
+  function sessionVisible(sessionKey) {
+    if (root.query === "") return true
+    return root.rows.some(function(r) { return r.session === sessionKey && root.rowMatches(r) })
+  }
 
   function sessionKey(session, value) {
     return session + ":" + value
@@ -184,13 +198,27 @@ Item {
 
   Component.onCompleted: root.rebuild()
 
-  Flickable {
+  Column {
     anchors.fill: parent
-    contentWidth: width
-    contentHeight: sessionsCol.implicitHeight
-    clip: true
-    boundsBehavior: Flickable.StopAtBounds
-    interactive: contentHeight > height
+    spacing: Style.space(10)
+
+    TextField {
+      id: searchField
+      width: parent.width
+      placeholderText: "Filter defaults…"
+      text: root.filter
+      onTextEdited: if (text !== root.filter) root.filter = text
+      Keys.onEscapePressed: root.filter = ""
+    }
+
+    Flickable {
+      width: parent.width
+      height: parent.height - searchField.height - Style.space(10)
+      contentWidth: width
+      contentHeight: sessionsCol.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      interactive: contentHeight > height
 
     Column {
       id: sessionsCol
@@ -204,6 +232,7 @@ Item {
           readonly property string sessionKey: modelData.key
           width: sessionsCol.width
           spacing: Style.space(4)
+          visible: root.sessionVisible(sessionKey)
 
           Text {
             width: parent.width
@@ -216,7 +245,7 @@ Item {
           }
 
           Repeater {
-            model: root.rows.filter(function(r) { return r.session === sessionKey })
+            model: root.rows.filter(function(r) { return r.session === sessionKey && root.rowMatches(r) })
             delegate: Item {
               required property var modelData
               width: sessionsCol.width
@@ -283,6 +312,18 @@ Item {
           }
         }
       }
+
+      Text {
+        width: parent.width
+        visible: root.query !== "" && !root.rows.some(function(r) { return root.rowMatches(r) })
+        textFormat: Text.PlainText
+        text: "No matches"
+        color: Color.foreground
+        opacity: 0.5
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+      }
+    }
     }
   }
 }
