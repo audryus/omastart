@@ -37,23 +37,97 @@ Item {
     return set
   }
 
-  // `driverless list` prints one printer per line: a URI followed by quoted
-  // metadata, e.g. `ipp://host/ipp/print "Model Name" "Make" ...`.
-  function applyScan() {
-    var known = root.installedUris()
+  // TXT comes as quoted groups: "product=(X Y)" "rp=auto" .... Values may
+  // carry spaces, so match per group instead of a flat regex.
+  function txtField(txt, key) {
+    var groups = String(txt || "").match(/"([^"]*)"/g) || []
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i].slice(1, -1)
+      if (g.charAt(g.length - 1) === ")" && g.indexOf(key + "=(") === 0)
+        return g.slice(key.length + 2, -1)
+      if (g.indexOf(key + "=") === 0) return g.slice(key.length + 1)
+    }
+    return ""
+  }
+
+  // avahi-browse `=` records need hostname/address/port/rp to build a URI:
+  // _ipp._tcp -> ipp://addr:port/rp, _ipps._tcp -> ipps://..., _printer._tcp
+  // (LPD, e.g. old Epsons with no IPP at all) -> lpd://addr/queue,
+  // _pdl-datastream._tcp (JetDirect) -> socket://addr:port.
+  function avahiUri(type, rec) {
+    if (!rec.address) return ""
+    if (type === "_ipp._tcp") return "ipp://" + rec.address + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
+    if (type === "_ipps._tcp") return "ipps://" + rec.address + ":" + (rec.port || "631") + "/" + (txtField(rec.txt, "rp") || "ipp/print")
+    if (type === "_printer._tcp") return "lpd://" + rec.address + "/" + (txtField(rec.txt, "rp") || "auto")
+    if (type === "_pdl-datastream._tcp") return "socket://" + rec.address + ":" + (rec.port || "9100")
+    return ""
+  }
+
+  function avahiName(rec) {
+    return txtField(rec.txt, "ty") || txtField(rec.txt, "product") || rec.svc
+  }
+
+  function parseDiscovery(text) {
     var rows = []
-    var lines = scanProc.collected.split("\n")
+    var seen = {}
+    var section = ""
+    var rec = null
+    function flush() {
+      if (rec && rec.type) {
+        var uri = rec.drv || avahiUri(rec.type, rec)
+        var name = rec.drvName || avahiName(rec)
+        if (uri && !seen[uri]) {
+          seen[uri] = true
+          rows.push({ name: name || uri, uri: uri })
+        }
+      }
+      rec = null
+    }
+    var lines = String(text || "").split("\n")
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i].trim()
+      var mSec = line.match(/^@@(\S+)(?:\s+(.*))?$/)
+      if (mSec) {
+        flush()
+        section = mSec[1] === "AVAHI" ? mSec[2] : "DRV"
+        continue
+      }
       if (!line) continue
-      var uri = line.split(/\s+/)[0]
-      if (uri.indexOf("ipp://") !== 0 && uri.indexOf("ipps://") !== 0) continue
-      var name = ""
-      var quoted = line.match(/"([^"]*)"/)
-      if (quoted) name = quoted[1]
-      if (!name) name = uri
-      if (known[uri] || known["name:" + name]) continue
-      rows.push({ name: name, uri: uri })
+      if (section === "DRV") {
+        var uri = line.split(/\s+/)[0]
+        if (uri.indexOf("ipp://") !== 0 && uri.indexOf("ipps://") !== 0) continue
+        var quoted = line.match(/"([^"]*)"/)
+        flush()
+        rec = { type: "DRV", drv: uri, drvName: quoted ? quoted[1] : "" }
+        flush()
+        continue
+      }
+      if (line.charAt(0) === "=") {
+        flush()
+        rec = { type: section, svc: line.substring(1).trim(), txt: "" }
+        continue
+      }
+      if (!rec) continue
+      var mH = line.match(/^hostname\s*=\s*\[(.*)\]/)
+      if (mH) { rec.hostname = mH[1]; continue }
+      var mA = line.match(/^address\s*=\s*\[(.*)\]/)
+      if (mA) { rec.address = mA[1]; continue }
+      var mP = line.match(/^port\s*=\s*\[(.*)\]/)
+      if (mP) { rec.port = mP[1]; continue }
+      var mT = line.match(/^txt\s*=\s*\[(.*)\]/)
+      if (mT) { rec.txt = mT[1]; continue }
+    }
+    flush()
+    return rows
+  }
+
+  function applyScan() {
+    var known = root.installedUris()
+    var all = root.parseDiscovery(scanProc.collected)
+    var rows = []
+    for (var i = 0; i < all.length; i++) {
+      if (known[all[i].uri] || known["name:" + all[i].name]) continue
+      rows.push(all[i])
     }
     root.found = rows
     root.scanning = false
@@ -62,7 +136,7 @@ Item {
   Process {
     id: scanProc
     property string collected: ""
-    command: ["bash", "-lc", "driverless list 2>/dev/null"]
+    command: ["bash", "-lc", "echo '@@DRV'; driverless list 2>/dev/null; for t in _ipp._tcp _ipps._tcp _printer._tcp _pdl-datastream._tcp; do echo \"@@AVAHI $t\"; timeout 8 avahi-browse -rt \"$t\" 2>/dev/null; done"]
     stdout: SplitParser {
       onRead: function(data) { scanProc.collected += data + "\n" }
     }
