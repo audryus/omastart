@@ -19,12 +19,14 @@ Item {
   onSectionChanged: {
     if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
     else if (section === "uninstall") { uninstallPage.refresh(); uninstallPage.focusSearch() }
+    else if (section === "joystick") joystickPage.refresh()
   }
   readonly property var sections: [
     { id: "general", label: "General" },
     { id: "defaults", label: "Defaults" },
     { id: "printers", label: "Printers" },
-    { id: "uninstall", label: "Uninstall" }
+    { id: "uninstall", label: "Uninstall" },
+    { id: "joystick", label: "Joystick" }
   ]
 
   signal requestClose()
@@ -37,7 +39,7 @@ Item {
   // would hit our scrim and close us. Same while printer discovery (its
   // own overlay) is open. So drop behind and yield focus until they go
   // away. Esc/X still close otherwise.
-  readonly property bool picking: generalPage.picking || printersPage.discoveryOpen
+  readonly property bool picking: generalPage.picking || printersPage.discoveryOpen || joystickPage.configuring
 
   PanelWindow {
     id: window
@@ -228,6 +230,14 @@ Item {
               anchors.fill: parent
               anchors.leftMargin: Style.space(12)
               visible: root.section === "uninstall"
+            }
+
+            Joystick {
+              id: joystickPage
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              visible: root.section === "joystick"
+              bar: root.bar
             }
           }
         }
