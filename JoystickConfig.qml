@@ -13,6 +13,8 @@ Item {
 
   property bool open: false
   property var bar: null
+  property var store: null
+  property string stickKey: ""
   property string pluginDir: ""
   property string deviceNode: ""
   property string deviceName: ""
@@ -20,6 +22,13 @@ Item {
   property string devicePid: ""
 
   signal requestClose()
+
+  readonly property string storedLabel: {
+    if (!store || !stickKey) return String(root.deviceName || "").trim()
+    var entry = store.identityFor(stickKey)
+    if (entry && entry.label) return entry.label
+    return String(root.deviceName || "").trim()
+  }
 
   readonly property var presets: [
     { id: "megadrive", label: "Megadrive", file: "presets/Megadrive.qml" },
@@ -190,6 +199,7 @@ Item {
     onExited: function(exitCode) {
       if (exitCode === 0) {
         root.dirty = false
+        if (root.store && root.stickKey) root.store.setPreset(root.stickKey, root.presetId)
         root.status = "Saved to " + root.cfgPath()
       } else {
         root.status = "Save failed (exit " + exitCode + ")."
@@ -327,6 +337,34 @@ Item {
           }
         }
 
+        // Editable stick name (defaults to the kernel label).
+        Row {
+          id: nameRow
+          width: parent.width
+          spacing: Style.space(8)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: "Name"
+            color: Color.foreground
+            opacity: 0.6
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+
+          TextField {
+            id: nameField
+            width: parent.width - Style.space(8) - 60
+            anchors.verticalCenter: parent.verticalCenter
+            placeholderText: "Stick name…"
+            text: root.storedLabel
+            onTextEdited: {
+              if (root.store && root.stickKey) root.store.setLabel(root.stickKey, text)
+            }
+          }
+        }
+
         // Preset selector (alphabetical).
         Row {
           id: presetRow
@@ -364,7 +402,7 @@ Item {
         Row {
           id: bodyRow
           width: parent.width
-          height: parent.height - header.height - presetRow.height - footerRow.height - Style.space(10) * 3
+          height: parent.height - header.height - nameRow.height - presetRow.height - footerRow.height - Style.space(10) * 4
           spacing: Style.space(12)
 
           Loader {

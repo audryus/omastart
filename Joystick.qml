@@ -30,6 +30,7 @@ Item {
   function configure(row) {
     if (!row || !row.node) return
     var vidpid = String(row.vidpid || "").split(":")
+    root.configKey = String(row.key || "")
     root.configNode = String(row.node)
     root.configName = String(row.label || row.node)
     root.configVid = vidpid.length > 0 ? vidpid[0] : ""
@@ -37,10 +38,88 @@ Item {
     root.configOpen = true
   }
 
+  // ---- identities (labels + presets), kept in joysticks.json ---------
+  readonly property string storePath: fsPluginDir + "/joysticks.json"
+  readonly property string fsPluginDir: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
+
+  property var identities: ({})
+  property string configKey: ""
+
+  readonly property var presetShort: ({
+    megadrive: "Mega", n64: "N64", playstation: "PS",
+    snes: "SNES", steam: "Steam", xbox: "Xbox"
+  })
+
+  function identityFor(key) {
+    if (!key) return null
+    var entry = root.identities[key]
+    return entry ? entry : null
+  }
+
+  function displayLabel(row) {
+    var entry = root.identityFor(row.key)
+    if (entry && entry.label) return entry.label
+    return row.label
+  }
+
+  function displayPreset(row) {
+    var entry = root.identityFor(row.key)
+    if (entry && entry.preset && root.presetShort[entry.preset]) return root.presetShort[entry.preset]
+    return ""
+  }
+
+  function setLabel(key, label) {
+    if (!key) return
+    var next = {}
+    for (var k in root.identities) next[k] = root.identities[k]
+    var entry = next[key] || {}
+    entry.label = String(label || "")
+    next[key] = entry
+    root.identities = next
+    root.saveIdentities()
+  }
+
+  function setPreset(key, presetId) {
+    if (!key) return
+    var next = {}
+    for (var k in root.identities) next[k] = root.identities[k]
+    var entry = next[key] || {}
+    entry.preset = String(presetId || "")
+    next[key] = entry
+    root.identities = next
+    root.saveIdentities()
+  }
+
+  function saveIdentities() {
+    Util.execDetached("printf '%s' " + Util.shellQuote(JSON.stringify(root.identities))
+      + " > " + Util.shellQuote(root.storePath))
+  }
+
+  function loadIdentities(text) {
+    var next = ({})
+    try {
+      var parsed = JSON.parse(String(text || ""))
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) next = parsed
+    } catch (e) { }
+    root.identities = next
+  }
+
+  FileView {
+    id: identitiesFile
+    path: root.storePath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.loadIdentities(text())
+    onLoadFailed: root.identities = ({})
+    onFileChanged: reload()
+  }
+
   JoystickConfig {
     id: configWindow
     open: root.configOpen
     bar: root.bar
+    store: root
+    stickKey: root.configKey
     pluginDir: String(Qt.resolvedUrl("joybind.py")).replace(/^file:\/\//, "").replace(/\/joybind\.py$/, "")
     deviceNode: root.configNode
     deviceName: root.configName
@@ -51,6 +130,20 @@ Item {
 
   // `for js in /dev/input/js*` with node, name, USB vid:pid + strings.
   // device is a symlink: resolve it before walking up to the USB device.
+  // Best identity available wins: USB serial (unique per unit, survives
+  // anything), else vid:pid@iface + deterministic #n among identical
+  // units in the same scan (these clones carry no serials, and twin
+  // units share vid:pid AND interface on separate plugs), else phys,
+  // else bare vid:pid.
+  function stickBaseKey(vidpid, iface, serial, phys) {
+    var cleanSerial = String(serial || "").replace(/\s+/g, "")
+    if (vidpid && vidpid !== ":" && cleanSerial) return "usb:" + vidpid + "#" + cleanSerial
+    if (vidpid && vidpid !== ":" && iface) return "usb:" + vidpid + "@if" + iface
+    if (phys) return "phys:" + phys.replace(/\s+/g, " ")
+    if (vidpid && vidpid !== ":") return "usb:" + vidpid
+    return ""
+  }
+
   function applyScan() {
     var rows = []
     var lines = scanProc.collected.split("\n")
@@ -64,7 +157,21 @@ Item {
       if (parts[2] && parts[2] !== ":") detail.push(parts[2])
       if (parts[4]) detail.push(parts[4])
       else if (parts[3]) detail.push(parts[3])
-      rows.push({ node: parts[0], label: parts[1] || parts[0], detail: detail.join("  ·  "), vidpid: parts[2] || "" })
+      rows.push({
+        node: parts[0],
+        label: parts[1] || parts[0],
+        detail: detail.join("  ·  "),
+        vidpid: parts[2] || "",
+        baseKey: root.stickBaseKey(parts[2] || "", parts[5] || "", parts[7] || "", parts[6] || "")
+      })
+    }
+    // Deterministic numbering for identical units (sorted by node).
+    rows.sort(function(a, b) { return a.node < b.node ? -1 : (a.node > b.node ? 1 : 0) })
+    var seen = {}
+    for (var j = 0; j < rows.length; j++) {
+      var base = rows[j].baseKey || ("node:" + rows[j].node)
+      seen[base] = (seen[base] || 0) + 1
+      rows[j].key = seen[base] > 1 ? (base + "#" + seen[base]) : base
     }
     root.sticks = rows
   }
@@ -72,7 +179,7 @@ Item {
   Process {
     id: scanProc
     property string collected: ""
-    command: ["bash", "-lc", "for js in /dev/input/js*; do [ -e \"$js\" ] || continue; dev=$(basename \"$js\"); name=$(tr -d '\\0' < /sys/class/input/$dev/device/name 2>/dev/null | xargs); d=$(readlink -f /sys/class/input/$dev/device); vid=''; pid=''; mfg=''; prod=''; for i in $(seq 1 8); do if [ -f \"$d/idVendor\" ]; then vid=$(cat \"$d/idVendor\"); pid=$(cat \"$d/idProduct\"); mfg=$(cat \"$d/manufacturer\" 2>/dev/null | xargs); prod=$(cat \"$d/product\" 2>/dev/null | xargs); break; fi; d=$(dirname \"$d\"); done; echo \"JS:$js|$name|$vid:$pid|$mfg|$prod\"; done"]
+    command: ["bash", "-lc", "for js in /dev/input/js*; do [ -e \"$js\" ] || continue; dev=$(basename \"$js\"); base=/sys/class/input/$dev/device; name=$(tr -d '\\0' < $base/name 2>/dev/null | xargs); d=$(readlink -f $base); vid=''; pid=''; mfg=''; prod=''; iface=''; serial=''; phys=''; child=''; for i in $(seq 1 8); do if [ -f \"$d/idVendor\" ]; then vid=$(cat \"$d/idVendor\"); pid=$(cat \"$d/idProduct\"); mfg=$(cat \"$d/manufacturer\" 2>/dev/null | xargs); prod=$(cat \"$d/product\" 2>/dev/null | xargs); serial=$(cat \"$d/serial\" 2>/dev/null | xargs); iface=$(basename \"$child\" | sed 's/.*://'); break; fi; child=\"$d\"; d=$(dirname \"$d\"); done; if [ -z \"$iface\" ]; then phys=$(tr -d '\\0' < $base/phys 2>/dev/null | xargs); fi; echo \"JS:$js|$name|$vid:$pid|$mfg|$prod|$iface|$phys|$serial\"; done"]
     stdout: SplitParser {
       onRead: function(data) { scanProc.collected += data + "\n" }
     }
@@ -156,11 +263,23 @@ Item {
               Text {
                 width: parent.width
                 textFormat: Text.PlainText
-                text: modelData.label
+                text: root.displayLabel(modelData)
                 color: Color.foreground
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.weight: Font.Medium
+                elide: Text.ElideRight
+              }
+
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: root.displayPreset(modelData) || "not configured yet"
+                color: root.displayPreset(modelData) ? Color.accent : Color.foreground
+                opacity: root.displayPreset(modelData) ? 1.0 : 0.55
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: root.displayPreset(modelData) ? Font.Medium : Font.Normal
                 elide: Text.ElideRight
               }
 

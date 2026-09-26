@@ -1,0 +1,4 @@
+# Per-machine joystick identities (labels + presets). The autoconfig/
+# profiles stay tracked on purpose: they are the portable deliverable
+# meant to be copied into RetroArch.
+joysticks.json
