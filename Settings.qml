@@ -16,8 +16,10 @@ Item {
   property var menu: null
 
   property string section: "general"
+  onSectionChanged: if (section === "defaults") defaultsPage.refresh()
   readonly property var sections: [
-    { id: "general", label: "General", icon: "" }
+    { id: "general", label: "General" },
+    { id: "defaults", label: "Defaults" }
   ]
 
   signal requestClose()
@@ -197,6 +199,15 @@ Item {
               anchors.leftMargin: Style.space(12)
               visible: root.section === "general"
               menu: root.menu
+            }
+
+            Defaults {
+              id: defaultsPage
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              visible: root.section === "defaults"
+              menu: root.menu
+              onCloseRequested: root.requestClose()
             }
           }
         }
