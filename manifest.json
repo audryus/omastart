@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "audryus.menu",
+  "name": "My Omarchy menu",
+  "version": "1.0.0",
+  "author": "Omarchy",
+  "description": "Quickshell-powered Omarchy command menu",
+  "kinds": [
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "My Omarchy menu",
+    "description": "Launches the Omarchy menu",
+    "category": "Compositor",
+    "allowMultiple": false
+  }
+}
