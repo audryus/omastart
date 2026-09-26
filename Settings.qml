@@ -19,7 +19,8 @@ Item {
   onSectionChanged: if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
   readonly property var sections: [
     { id: "general", label: "General" },
-    { id: "defaults", label: "Defaults" }
+    { id: "defaults", label: "Defaults" },
+    { id: "printers", label: "Printers" }
   ]
 
   signal requestClose()
@@ -29,9 +30,10 @@ Item {
 
   // While the folder picker runs, this overlay would cover zenity (a
   // plain toplevel) and swallow its keys — and a click meant for zenity
-  // would hit our scrim and close us. So drop behind and yield focus
-  // until the pick finishes or is cancelled. Esc/X still close otherwise.
-  readonly property bool picking: generalPage.picking
+  // would hit our scrim and close us. Same while printer discovery (its
+  // own overlay) is open. So drop behind and yield focus until they go
+  // away. Esc/X still close otherwise.
+  readonly property bool picking: generalPage.picking || printersPage.discoveryOpen
 
   PanelWindow {
     id: window
@@ -208,6 +210,13 @@ Item {
               visible: root.section === "defaults"
               menu: root.menu
               onCloseRequested: root.requestClose()
+            }
+
+            Printers {
+              id: printersPage
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              visible: root.section === "printers"
             }
           }
         }
