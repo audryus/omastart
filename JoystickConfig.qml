@@ -258,24 +258,9 @@ Item {
       }
       root.dirty = false
       if (root.store && root.stickKey) root.store.setPreset(root.stickKey, root.presetId)
-      // Saved: the install + remap continue in the background; close up.
+      // Local save only (preset + core remap). RetroArch install happens
+      // from the list's Set Retroarch Controller button.
       root.requestClose()
-      // Install into RetroArch's own autoconfig dir (system path, hence
-      // pkexec): without this step RetroArch never loads the profile.
-      // Installed filename follows the kernel name (what RA matches on).
-      installProc.command = ["bash", "-lc",
-        "pkexec cp " + Util.shellQuote(root.cfgPath()) + " " + Util.shellQuote("/usr/share/libretro/autoconfig/udev/" + root.kernelFileName() + ".cfg")]
-      installProc.running = true
-      var extra = root.remapTemplate ? " + core remap" : ""
-      root.status = "Saved locally" + extra + " — installing into RetroArch…"
-    }
-  }
-
-  Process {
-    id: installProc
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.status = "Installed — restart the game to load it."
-      else root.status = "Saved locally, RetroArch install failed (exit " + exitCode + ")."
     }
   }
 

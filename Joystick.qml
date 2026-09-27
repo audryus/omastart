@@ -18,6 +18,9 @@ Item {
   property string configPid: ""
   // True while the configurator window is up (Settings yields to it).
   readonly property bool configuring: configWindow.open
+  // True while a RetroArch install runs (Settings keeps yielding so the
+  // polkit prompt stays usable).
+  property bool installing: false
 
   function focusSearch() {}
 
@@ -155,11 +158,21 @@ Item {
   // device (pkexec prompt): for identical twins sharing one kernel name,
   // the last one modeled wins for both.
   function makeModel(row) {
-    if (!row) return
+    if (!row || installProc.running) return
     var src = root.fsPluginDir + "/autoconfig/" + root.sanitizeFile(root.displayLabel(row)) + ".cfg"
     var dest = "/usr/share/libretro/autoconfig/udev/" + root.sanitizeFile(row.label) + ".cfg"
-    Util.execDetached("pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest))
-    Qt.callLater(root.scanShadows, 3000)
+    installProc.command = ["bash", "-lc",
+      "pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest)]
+    root.installing = true
+    installProc.running = true
+  }
+
+  Process {
+    id: installProc
+    onExited: {
+      root.installing = false
+      root.scanShadows()
+    }
   }
 
   function setLabel(key, label) {

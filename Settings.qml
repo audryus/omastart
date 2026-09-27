@@ -39,7 +39,7 @@ Item {
   // would hit our scrim and close us. Same while printer discovery (its
   // own overlay) is open. So drop behind and yield focus until they go
   // away. Esc/X still close otherwise.
-  readonly property bool picking: generalPage.picking || printersPage.discoveryOpen || joystickPage.configuring
+  readonly property bool picking: generalPage.picking || printersPage.discoveryOpen || joystickPage.configuring || joystickPage.installing
 
   PanelWindow {
     id: window
