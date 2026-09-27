@@ -544,70 +544,70 @@ Item {
             }
           }
 
-          Flickable {
+          ListView {
+            id: bindList
             width: parent.width - 320 - Style.space(12)
             height: parent.height
-            contentWidth: width
-            contentHeight: bindCol.implicitHeight
             clip: true
+            spacing: Style.space(2)
+            model: root.presetButtons
             boundsBehavior: Flickable.StopAtBounds
-            interactive: contentHeight > height
+            // Follow the wizard: keep the row being bound visible no
+            // matter how long the preset is (no height whack-a-mole).
+            currentIndex: root.bindIndex
+            onCurrentIndexChanged: {
+              if (currentIndex >= 0) bindList.positionViewAtIndex(currentIndex, ListView.Contain)
+            }
 
-            Column {
-              id: bindCol
-              width: parent.width
-              spacing: Style.space(2)
+            delegate: Item {
+              required property var modelData
+              required property int index
+              width: bindList.width
+              height: Style.space(28)
 
-              Repeater {
-                model: root.presetButtons
-                delegate: Item {
-                  required property var modelData
-                  required property int index
-                  width: bindCol.width
-                  height: Style.space(28)
+              Rectangle {
+                anchors.fill: parent
+                radius: Style.cornerRadius
+                color: bindMouse.containsMouse || root.currentKey === modelData.key
+                  ? Style.hoverFillFor(Color.foreground, Color.accent)
+                  : "transparent"
+                border.width: root.currentKey === modelData.key ? 1 : 0
+                border.color: Color.accent
+              }
 
-                  Rectangle {
-                    anchors.fill: parent
-                    radius: Style.cornerRadius
-                    color: bindMouse.containsMouse || root.currentKey === modelData.key
-                      ? Style.hoverFillFor(Color.foreground, Color.accent)
-                      : "transparent"
-                  }
+              Text {
+                anchors.left: parent.left
+                anchors.right: bindValue.left
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(8)
+                textFormat: Text.PlainText
+                text: (index + 1) + ". " + modelData.label
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: root.currentKey === modelData.key ? Font.Medium : Font.Normal
+                elide: Text.ElideRight
+              }
 
-                  Text {
-                    anchors.left: parent.left
-                    anchors.right: bindValue.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(8)
-                    textFormat: Text.PlainText
-                    text: (index + 1) + ". " + modelData.label
-                    color: Color.foreground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    elide: Text.ElideRight
-                  }
+              Text {
+                id: bindValue
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: root.bindingText(modelData.key)
+                color: Color.foreground
+                opacity: 0.6
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
 
-                  Text {
-                    id: bindValue
-                    anchors.right: parent.right
-                    anchors.rightMargin: Style.space(8)
-                    anchors.verticalCenter: parent.verticalCenter
-                    textFormat: Text.PlainText
-                    text: root.bindingText(modelData.key)
-                    color: Color.foreground
-                    opacity: 0.6
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                  }
-
-                  MouseArea {
-                    id: bindMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.bindOne(modelData.key)
-                  }
-                }
+              MouseArea {
+                id: bindMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.bindOne(modelData.key)
               }
             }
           }
