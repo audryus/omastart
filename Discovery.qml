@@ -191,7 +191,7 @@ Item {
     visible: root.open
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "audryus-printer-discovery"
+    WlrLayershell.namespace: "omastart-printer-discovery"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore

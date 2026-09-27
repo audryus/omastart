@@ -1,4 +1,4 @@
-PLUGIN_ID := audryus.menu
+PLUGIN_ID := audryus.omastart
 BAR_QML := BarWidget.qml
 # Último diretório de log do quickshell (muda a cada restart do shell)
 LATEST_LOG_DIR = $(shell ls -td /run/user/1000/quickshell/by-id/*/ 2>/dev/null | head -n 1)

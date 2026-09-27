@@ -4,7 +4,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 
-// Floating settings window for audryus.menu. The bar widget closes itself
+// Floating settings window for audryus.omastart. The bar widget closes itself
 // and flips `open`; only this window stays on screen until the X (or
 // outside click / Esc) emits requestClose.
 Item {
@@ -46,7 +46,7 @@ Item {
     visible: root.open
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "audryus-settings"
+    WlrLayershell.namespace: "omastart-settings"
     WlrLayershell.layer: root.picking ? WlrLayer.Bottom : WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.picking ? WlrKeyboardFocus.None : WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore

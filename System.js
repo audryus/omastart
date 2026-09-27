@@ -1,4 +1,4 @@
-// System footer rows for audryus.menu.
+// System footer rows for audryus.omastart.
 //
 // Pure logic (no imports): the caller parses + merges with MenuModel.js and
 // hands the merged maps in:

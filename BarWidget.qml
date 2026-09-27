@@ -7,7 +7,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "audryus.menu"
+  moduleName: "audryus.omastart"
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -58,7 +58,7 @@ BarWidget {
   // Favorite folders (General section + right pane): JSON array of
   // absolute paths. Owned here because Settings/General shares it.
   property var favorites: []
-  readonly property string favoritesPath: Quickshell.env("HOME") + "/.local/state/omarchy/settings/audryus-menu-favorites.json"
+  readonly property string favoritesPath: Quickshell.env("HOME") + "/.local/state/omarchy/settings/omastart-favorites.json"
 
   function loadFavorites(text) {
     var next = []
@@ -120,7 +120,7 @@ BarWidget {
     visible: root.menuOpen
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "audryus-menu"
+    WlrLayershell.namespace: "omastart-menu"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
