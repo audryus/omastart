@@ -3,12 +3,13 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "MenuModel.js" as MenuModel
 
 // Defaults section: friendlier take on setup.default.* — the four sessions
 // (Agent, Browser, Terminal, Editor) as radio lists. Options, visibility
-// rules and set actions come from the merged menu (user overrides apply);
-// install actions come from the matching install.* entries, like the
-// traditional menu. `menu` is the BarWidget root (menu.menuMerged()).
+// rules and set actions come from the merged menu (user overrides apply,
+// own FileViews); install actions come from the matching install.*
+// entries, like the traditional menu.
 Item {
   id: root
 
@@ -66,9 +67,34 @@ Item {
     return script
   }
 
+  property var defaultMenuItems: []
+  property var userMenuItems: []
+
+  function menuMerged() {
+    return MenuModel.mergeMenuSources(root.defaultMenuItems, root.userMenuItems)
+  }
+
+  FileView {
+    id: defaultMenuFile
+    path: "/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc"
+    watchChanges: true
+    printErrors: false
+    onLoaded: { root.defaultMenuItems = MenuModel.parseMenuJsonc(text()); root.rebuild() }
+    onFileChanged: reload()
+  }
+
+  FileView {
+    id: userMenuFile
+    path: Quickshell.env("HOME") + "/.config/omarchy/extensions/omarchy-menu.jsonc"
+    watchChanges: true
+    printErrors: false
+    onLoaded: { root.userMenuItems = MenuModel.parseMenuJsonc(text()); root.rebuild() }
+    onLoadFailed: { root.userMenuItems = []; root.rebuild() }
+    onFileChanged: reload()
+  }
+
   function rebuild() {
-    if (!root.menu) return
-    var merged = root.menu.menuMerged()
+    var merged = root.menuMerged()
     var items = merged.items
     var skeleton = []
     for (var s = 0; s < root.sessions.length; s++) {
