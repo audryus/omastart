@@ -22,20 +22,32 @@ Rectangle {
   color: "transparent"
 
   readonly property string homeDir: Quickshell.env("HOME")
+  // Per-mouse-button actions ("fm" = file manager, "term" = terminal,
+  // "agent" = default agent). Missing button = do nothing (not even close).
   readonly property var places: [
-    { label: "My Computer", dir: homeDir, icon: "\uf015" },
+    { label: "My Computer", dir: homeDir, icon: "\uf015", left: "fm", right: "term" },
     { divider: true },
-    { label: "Projects", dir: homeDir + "/Projects", icon: "\uf121" },
-    { label: "Work", dir: homeDir + "/Work", special: "work", icon: "\uf0b1" },
+    { label: "Projects", dir: homeDir + "/Projects", icon: "\uf121", left: "fm", middle: "agent", right: "term" },
+    { label: "Work", dir: homeDir + "/Work", icon: "\uf0b1", left: "fm", middle: "agent", right: "term" },
     { divider: true },
-    { label: "Documents", dir: homeDir + "/Documents", icon: "\uf15c" },
-    { label: "Downloads", dir: homeDir + "/Downloads", icon: "\uf019" },
-    { label: "Games", dir: homeDir + "/Games", icon: "\uf11b" },
+    { label: "Documents", dir: homeDir + "/Documents", icon: "\uf15c", left: "fm", right: "term" },
+    { label: "Downloads", dir: homeDir + "/Downloads", icon: "\uf019", left: "fm", right: "term" },
+    { label: "Games", dir: homeDir + "/Games", icon: "\uf11b", left: "fm", right: "term" },
     { divider: true },
-    { label: "Music", dir: homeDir + "/Music", icon: "\uf001" },
-    { label: "Pictures", dir: homeDir + "/Pictures", icon: "\uf03e" },
-    { label: "Videos", dir: homeDir + "/Videos", icon: "\uf008" },
+    { label: "Music", dir: homeDir + "/Music", icon: "\uf001", left: "fm", right: "term" },
+    { label: "Pictures", dir: homeDir + "/Pictures", icon: "\uf03e", left: "fm", right: "term" },
+    { label: "Videos", dir: homeDir + "/Videos", icon: "\uf008", left: "fm", right: "term" },
   ]
+
+  function runPlaceAction(entry, button) {
+    var act = button === Qt.LeftButton ? entry.left
+      : button === Qt.MiddleButton ? entry.middle
+      : button === Qt.RightButton ? entry.right : undefined
+    if (act === "fm") { root.closeRequested(); root.openFm(entry.dir) }
+    else if (act === "term") { root.closeRequested(); root.openTerm(entry.dir) }
+    else if (act === "agent") { root.closeRequested(); root.openAgent(entry.dir) }
+    // No action defined: do nothing (menu stays open).
+  }
 
   // Last path segment only (e.g. valid8); full path goes to the tooltip.
   function shortFavorite(path) {
@@ -57,7 +69,9 @@ Rectangle {
           dir: favs[i],
           icon: "\uf07b",
           tip: true,
-          agent: true
+          left: "fm",
+          middle: "agent",
+          right: "term"
         })
       }
     }
@@ -124,22 +138,14 @@ Rectangle {
             elide: Text.ElideRight
           }
 
-          MouseArea {
-            id: placeMouse
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: function(mouse) {
-              var dir = modelData.dir
-              var special = modelData.special
-              root.closeRequested()
-              if (mouse.button === Qt.RightButton) root.openTerm(dir)
-              else if (mouse.button === Qt.MiddleButton) {
-                if (special === "work" || modelData.agent) root.openAgent(dir)
-              } else root.openFm(dir)
-            }
-          }
+                    MouseArea {
+                      id: placeMouse
+                      anchors.fill: parent
+                      acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: function(mouse) { root.runPlaceAction(modelData, mouse.button) }
+                    }
 
           PanelToolTip {
             visible: placeMouse.containsMouse && !!modelData.tip
