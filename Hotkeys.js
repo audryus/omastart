@@ -12,6 +12,13 @@ var MARK_END = "-- omastart hotkeys:end"
 var MOD_ORDER = ["SUPER", "SHIFT", "ALT", "CTRL"]
 var MOD_ALIASES = { META: "SUPER", CONTROL: "CTRL", SUPER: "SUPER", SHIFT: "SHIFT", ALT: "ALT", CTRL: "CTRL" }
 
+// A lone modifier can never fire (the mod is not active yet on its own
+// press, and this Hyprland Lua API has no hl.bindr). The editor blocks
+// saving them instead.
+function isBareMod(normKey) {
+  return MOD_ORDER.indexOf(normKey) >= 0
+}
+
 function unescapeLua(value) {
   return String(value || "").replace(/\\(.)/g, "$1")
 }
@@ -37,6 +44,8 @@ function parseUnbindLine(line) {
   var m = String(line || "").match(/^\s*hl\.unbind\(\s*"((?:[^"\\]|\\.)*)"\s*\)/)
   return m ? unescapeLua(m[1]) : null
 }
+
+
 
 function parseFile(text) {
   var binds = []
@@ -105,13 +114,17 @@ function actionSource(row) {
   return row.action
 }
 
+function serializeRow(row) {
+  return "o.bind(\"" + escapeLua(row.key) + "\", \"" + escapeLua(row.label) + "\", " + actionSource(row) + ")"
+}
+
 function serializeBlock(userRows) {
   var lines = [MARK_BEGIN]
   for (var i = 0; i < userRows.length; i++) {
     var row = userRows[i]
     var reps = row.replaces || []
     for (var r = 0; r < reps.length; r++) lines.push("hl.unbind(\"" + escapeLua(reps[r]) + "\")")
-    lines.push("o.bind(\"" + escapeLua(row.key) + "\", \"" + escapeLua(row.label) + "\", " + actionSource(row) + ")")
+    lines.push(serializeRow(row))
   }
   lines.push(MARK_END)
   return lines.join("\n") + "\n"
@@ -176,6 +189,7 @@ if (typeof module !== "undefined") {
   module.exports = {
     parseFile: parseFile,
     normalizeKey: normalizeKey,
+    isBareMod: isBareMod,
     mergeView: mergeView,
     serializeBlock: serializeBlock,
     extractBlock: extractBlock,

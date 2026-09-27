@@ -216,6 +216,17 @@ Item {
 
         Text {
           width: parent.width
+          visible: HotkeysJS.isBareMod(root.normSeq)
+          textFormat: Text.PlainText
+          text: "A lone modifier can never fire — add a key to it."
+          color: Color.urgent
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          font.weight: Font.Medium
+        }
+
+        Text {
+          width: parent.width
           textFormat: Text.PlainText
           text: "Label"
           color: Color.foreground
@@ -280,7 +291,7 @@ Item {
             id: saveButton
             text: "Save"
             bordered: true
-            enabled: root.seq !== "" && root.label.trim() !== "" && !root.duplicate
+            enabled: root.seq !== "" && root.label.trim() !== "" && !root.duplicate && !HotkeysJS.isBareMod(root.normSeq)
             onClicked: {
               var kind = root.commandKind
               if (root.editing && root.command === String(root.editing.action || "")) kind = String(root.editing.actionKind || "string")

@@ -36,16 +36,28 @@ Item {
     return out
   }
 
+  function removeCustom(row) {
+    if (!row || row.source !== "user") return
+    var next = []
+    for (var i = 0; i < root.userRows.length; i++) {
+      if (root.userRows[i].key === row.key) continue
+      next.push(root.userRows[i])
+    }
+    root.userRows = next
+    root.save()
+  }
+
   function displayRows() {
     var rows = HotkeysJS.mergeView(root.defaultBinds, root.userRows)
-    // Customs and modified defaults first, then everything else.
-    var mine = []
+    // Customs first, then untouched defaults. Overridden defaults are
+    // hidden (their replacement carries the context); Reset lives on it.
+    var customs = []
     var rest = []
     for (var i = 0; i < rows.length; i++) {
-      if (rows[i].source === "user" || rows[i].modifiedBy) mine.push(rows[i])
-      else rest.push(rows[i])
+      if (rows[i].source === "user") customs.push(rows[i])
+      else if (!rows[i].modifiedBy) rest.push(rows[i])
     }
-    rows = mine.concat(rest)
+    rows = customs.concat(rest)
     if (root.query === "") return rows
     var out = []
     for (var j = 0; j < rows.length; j++) {
@@ -101,14 +113,21 @@ Item {
     return null
   }
 
-  // Accepted from the edit window: replace any user row with the same key
-  // (or the row it was edited from), keep the rest.
+  // Accepted from the edit window: a default being re-edited drops its
+  // previous override (matched via replaces, not key); anything else
+  // replaces by key. Keeps exactly one row per edit.
   function applyAccepted(payload) {
+    var origKey = root.editing ? root.editing.key : ""
+    var wasDefault = root.editing && root.editing.source === "default"
     var next = []
     for (var i = 0; i < root.userRows.length; i++) {
-      if (root.userRows[i].key === payload.key) continue
-      if (root.editing && root.userRows[i].key === root.editing.key && payload.key !== root.editing.key) continue
-      next.push(root.userRows[i])
+      var current = root.userRows[i]
+      if (current.key === payload.key) continue
+      if (wasDefault) {
+        var reps = current.replaces || []
+        if (reps.indexOf(origKey) >= 0) continue
+      } else if (origKey && current.key === origKey && payload.key !== origKey) continue
+      next.push(current)
     }
     var replaces = []
     if (root.editing && root.editing.source === "default") replaces = [root.editing.key]
@@ -239,10 +258,11 @@ Item {
           model: root.displayRows()
           delegate: BorderSurface {
             required property var modelData
+            readonly property bool mine: modelData.source === "user" || !!modelData.modifiedBy
             width: rowsCol.width
             height: rowCard.implicitHeight + Style.space(16)
             radius: Style.cornerRadius
-            color: "transparent"
+            color: mine ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
             borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
 
             Column {
@@ -260,21 +280,11 @@ Item {
                 text: modelData.key
                   + (modelData.label ? "  ·  " + modelData.label : "")
                   + (modelData.source === "default" ? "" : "  ·  custom")
+                  + ((modelData.replaces || []).length > 0 ? "  ·  replaces " + modelData.replaces.join(", ") : "")
                 color: modelData.modifiedBy ? Color.accent : Color.foreground
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
                 font.weight: Font.Medium
-                elide: Text.ElideRight
-              }
-
-              Text {
-                width: parent.width
-                visible: !!modelData.modifiedBy
-                textFormat: Text.PlainText
-                text: "modified → " + (modelData.modifiedBy ? modelData.modifiedBy.key : "")
-                color: Color.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
                 elide: Text.ElideRight
               }
 
@@ -289,10 +299,17 @@ Item {
                 }
 
                 Button {
-                  visible: !!modelData.modifiedBy
+                  visible: (modelData.replaces || []).length > 0
                   text: "Reset"
                   bordered: true
-                  onClicked: root.resetDefault(modelData)
+                  onClicked: root.resetDefault({ key: (modelData.replaces || [])[0] })
+                }
+
+                Button {
+                  visible: modelData.source === "user" && (modelData.replaces || []).length === 0
+                  text: "Remove"
+                  bordered: true
+                  onClicked: root.removeCustom(modelData)
                 }
               }
             }
