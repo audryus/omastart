@@ -258,6 +258,8 @@ Item {
       }
       root.dirty = false
       if (root.store && root.stickKey) root.store.setPreset(root.stickKey, root.presetId)
+      // Saved: the install + remap continue in the background; close up.
+      root.requestClose()
       // Install into RetroArch's own autoconfig dir (system path, hence
       // pkexec): without this step RetroArch never loads the profile.
       // Installed filename follows the kernel name (what RA matches on).

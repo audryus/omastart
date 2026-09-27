@@ -417,9 +417,19 @@ Item {
 
                 Button {
                   visible: hasPreset
-                  text: "Model"
+                  text: "Set Retroarch Controller"
                   bordered: true
                   onClicked: root.makeModel(modelData)
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                    PanelToolTip {
+                      visible: parent.containsMouse
+                      text: "Install this stick's profile as RetroArch's controller profile."
+                    }
+                  }
                 }
 
                 Button {
