@@ -341,6 +341,47 @@ Item {
     }
   }
 
+  // N64 analog tuning: core options have no per-profile equivalent.
+  readonly property string coreOptPath: Quickshell.env("HOME") + "/.config/retroarch/config/Mupen64Plus-Next/Mupen64Plus-Next.opt"
+  property int sensitivity: 100
+  property int deadzone: 15
+  property string coreOptText: ""
+
+  function loadCoreOpts(text) {
+    root.coreOptText = String(text || "")
+    var mS = root.coreOptText.match(/^mupen64plus-astick-sensitivity\s*=\s*"(\d+)"/m)
+    var mD = root.coreOptText.match(/^mupen64plus-astick-deadzone\s*=\s*"(\d+)"/m)
+    if (mS) root.sensitivity = Number(mS[1])
+    if (mD) root.deadzone = Number(mD[1])
+  }
+
+  function writeCoreOpts() {
+    var lines = root.coreOptText.split("\n")
+    var hasS = false, hasD = false
+    for (var i = 0; i < lines.length; i++) {
+      if (/^mupen64plus-astick-sensitivity\s*=/.test(lines[i])) {
+        lines[i] = "mupen64plus-astick-sensitivity = \"" + root.sensitivity + "\""
+        hasS = true
+      } else if (/^mupen64plus-astick-deadzone\s*=/.test(lines[i])) {
+        lines[i] = "mupen64plus-astick-deadzone = \"" + root.deadzone + "\""
+        hasD = true
+      }
+    }
+    if (!hasS) lines.push("mupen64plus-astick-sensitivity = \"" + root.sensitivity + "\"")
+    if (!hasD) lines.push("mupen64plus-astick-deadzone = \"" + root.deadzone + "\"")
+    // RetroArch rewrites this file on exit; last writer wins.
+    Util.execDetached("printf '%s' " + Util.shellQuote(lines.join("\n"))
+      + " > " + Util.shellQuote(root.coreOptPath))
+  }
+
+  FileView {
+    id: coreOptFile
+    path: root.coreOptPath
+    watchChanges: false
+    printErrors: false
+    onLoaded: root.loadCoreOpts(text())
+  }
+
   function resetForDevice() {
     root.stopBinding(true)
     root.mapping = ({})
@@ -357,7 +398,7 @@ Item {
     root.presetId = preset
   }
 
-  onOpenChanged: if (open) root.resetForDevice()
+  onOpenChanged: if (open) { root.resetForDevice(); coreOptFile.reload() }
   onDeviceNodeChanged: if (open) root.resetForDevice()
 
   PanelWindow {
@@ -510,10 +551,15 @@ Item {
           height: parent.height - header.height - nameRow.height - presetRow.height - footerRow.height - Style.space(10) * 4
           spacing: Style.space(12)
 
-          Loader {
-            id: presetLoader
+          Column {
             width: 320
             height: parent.height
+            spacing: Style.space(8)
+
+            Loader {
+              id: presetLoader
+              width: 320
+              height: 190
             // NOTE: a plain relative "presets/X.qml" resolves through the
             // qs: module mapping and fails with `module "qs.Commons" is not
             // installed` (seen in preserved logs); Qt.resolvedUrl gives a
@@ -527,6 +573,106 @@ Item {
             onLoaded: {
               if (item) item.activeKey = Qt.binding(function() { return root.currentKey })
             }
+          }
+
+          // N64 analog tuning (mupen64plus-next core options). No per-profile
+          // sensitivity exists in autoconfig, so this is the only lever.
+          Column {
+            width: 320
+            spacing: Style.space(6)
+            visible: root.presetId === "n64"
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: "Analog tuning"
+              color: Color.foreground
+              opacity: 0.6
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: true
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(86)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Sensitivity"
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+              }
+
+              PanelSlider {
+                id: sensSlider
+                width: parent.width - Style.space(86) - Style.space(44) - Style.space(8) * 2
+                anchors.verticalCenter: parent.verticalCenter
+                bar: root.bar
+                minimum: 50
+                maximum: 200
+                step: 5
+                integer: true
+                value: root.sensitivity
+                onMoved: function(v) { root.sensitivity = Math.round(v) }
+                onReleased: function(v) { root.sensitivity = Math.round(v); root.writeCoreOpts() }
+              }
+
+              Text {
+                width: Style.space(44)
+                anchors.verticalCenter: parent.verticalCenter
+                horizontalAlignment: Text.AlignRight
+                textFormat: Text.PlainText
+                text: root.sensitivity
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+              }
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(86)
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Deadzone"
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+              }
+
+              PanelSlider {
+                id: deadSlider
+                width: parent.width - Style.space(86) - Style.space(44) - Style.space(8) * 2
+                anchors.verticalCenter: parent.verticalCenter
+                bar: root.bar
+                minimum: 0
+                maximum: 30
+                step: 1
+                integer: true
+                value: root.deadzone
+                onMoved: function(v) { root.deadzone = Math.round(v) }
+                onReleased: function(v) { root.deadzone = Math.round(v); root.writeCoreOpts() }
+              }
+
+              Text {
+                width: Style.space(44)
+                anchors.verticalCenter: parent.verticalCenter
+                horizontalAlignment: Text.AlignRight
+                textFormat: Text.PlainText
+                text: root.deadzone
+                color: Color.foreground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+              }
+            }
+          }
           }
 
           ListView {
