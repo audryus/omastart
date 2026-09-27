@@ -17,7 +17,7 @@ Rectangle {
   anchors.top: parent.top
   anchors.bottom: parent.bottom
   anchors.right: parent.right
-  width: parent.width * 0.3
+  width: parent.width * 0.35
   radius: Style.cornerRadius
   color: "transparent"
 

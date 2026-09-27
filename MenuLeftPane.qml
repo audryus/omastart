@@ -21,7 +21,7 @@ Rectangle {
   anchors.top: parent.top
   anchors.bottom: parent.bottom
   anchors.left: parent.left
-  width: parent.width * 0.7
+  width: parent.width * 0.65
   radius: Style.cornerRadius
   color: "transparent"
 
@@ -136,6 +136,8 @@ Rectangle {
   function openMenuRow(row) {
     if (!row) return
     if (row.kind === "app") { root.launchApp(row.appId, row.label); return }
+    // Install lives in the traditional menu: hand off straight to it.
+    if (row.id === "install") { root.openOfficial("install"); return }
     // Provider-backed submenus (e.g. fonts) load on demand in the official
     // menu: hand off instead of showing an empty level here.
     if (row.provider) { root.openOfficial(row.id); return }
@@ -190,15 +192,15 @@ Rectangle {
   }
 
   // Row 1: all apps, grouped A-Z. Search filters only this list.
-  Item {
-    id: appsBox
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.topMargin: Style.space(8)
-    anchors.leftMargin: Style.space(8)
-    anchors.rightMargin: Style.space(8)
-    height: parent.height * 0.6
+    Item {
+      id: appsBox
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.topMargin: Style.space(8)
+      anchors.leftMargin: Style.space(8)
+      anchors.rightMargin: Style.space(8)
+      height: parent.height * 0.58
 
     Text {
       id: appsHeader

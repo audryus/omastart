@@ -37,7 +37,7 @@ function systemRows(items, itemOrder) {
 // Row 2 shows this tree; row 3 lists every app directly, so apps is not a
 // tree root here. Setup (Settings) and system live in the footer instead.
 var TOP_ROOTS = ["apps", "learn", "trigger", "style"]
-var TREE_ROOTS = ["learn", "trigger", "style"]
+var TREE_ROOTS = ["install", "learn", "trigger", "style"]
 
 function topSegment(id) {
   return String(id || "").split(".")[0]
