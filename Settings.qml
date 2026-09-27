@@ -20,13 +20,15 @@ Item {
     if (section === "defaults") { defaultsPage.refresh(); defaultsPage.focusSearch() }
     else if (section === "uninstall") { uninstallPage.refresh(); uninstallPage.focusSearch() }
     else if (section === "joystick") joystickPage.refresh()
+    else if (section === "hotkeys") { hotkeysPage.refresh(); hotkeysPage.focusSearch() }
   }
   readonly property var sections: [
     { id: "general", label: "General" },
     { id: "defaults", label: "Defaults" },
     { id: "printers", label: "Printers" },
     { id: "uninstall", label: "Uninstall" },
-    { id: "joystick", label: "Joystick" }
+    { id: "joystick", label: "Joystick" },
+    { id: "hotkeys", label: "Hotkeys" }
   ]
 
   signal requestClose()
@@ -238,6 +240,13 @@ Item {
               anchors.leftMargin: Style.space(12)
               visible: root.section === "joystick"
               bar: root.bar
+            }
+
+            Hotkeys {
+              id: hotkeysPage
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(12)
+              visible: root.section === "hotkeys"
             }
           }
         }
