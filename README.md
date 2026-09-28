@@ -54,7 +54,7 @@ Opens from the footer (the main popup closes first). One window, left section me
 
 - Input capture is `joybind.py` (stdlib only): baselines the stick for 200ms so resting trigger axes don't false-fire, then reports the first fresh `BTN n` / `AXIS ±n`. D-pad directions are validated (`_minus` only accepts `-N`).
 - Capture reads joydev (`/dev/input/jsX`), which numbers buttons and axes like RetroArch's **udev** joypad driver (the one this targets). D-pad hats, which joydev reports as plain axes (6/7 on a DS4), are written as `h0up`/`h0down`/`h0left`/`h0right`, like the stock profiles. A profile made for another driver is flagged for rebinding.
-- Save writes a udev **autoconfig profile** with the exact kernel device name (padding preserved — RetroArch string-matches it), decimal vid:pid, `*_btn`/`*_axis` mappings plus correctly suffixed `_label` descriptors. Local copy is named after your label (`autoconfig/`, tracked). **Set Retroarch Controller** copies it to `/usr/share/libretro/autoconfig/udev/` via polkit and resets retroarch.cfg's per-player joypad binds to `nul` (they would override any profile); it refuses while RetroArch runs, since RetroArch rewrites the file on exit. The in-game OSD (`OmaStart <label>`) proves which profile won.
+- Save writes a udev **autoconfig profile** with the exact kernel device name (padding preserved — RetroArch string-matches it), decimal vid:pid, `*_btn`/`*_axis` mappings plus correctly suffixed `_label` descriptors. Local copy is named after your label (`autoconfig/`, git-ignored). **Set Retroarch Controller** copies it to `/usr/share/libretro/autoconfig/udev/` via polkit and resets retroarch.cfg's per-player joypad binds to `nul` (they would override any profile); it refuses while RetroArch runs, since RetroArch rewrites the file on exit. The in-game OSD (`OmaStart <label>`) proves which profile won.
 - Core remaps per preset: **N64** emits `Mupen64Plus-Next.rmp` from your hand-tuned template, with dead mappings dropped; **PlayStation** sets port 1 to DualShock in `Beetle PSX.rmp` and exposes the DualShock mode (`beetle_psx_analog_toggle`): *Analog* boots with working sticks, *Digital* needs the L1+R1+Select combo first.
 
 ## Repository layout
@@ -83,4 +83,4 @@ Opens from the footer (the main popup closes first). One window, left section me
 
 - Twin USB sticks without serials are told apart by interface + deterministic numbering; swapping two identical plugs between ports may swap their numbers.
 - Package updates can restore a moved-aside stock autoconfig — the shadow warning reappears and one click fixes it again.
-- `joysticks.json` (machine-local labels) is git-ignored; `autoconfig/` profiles are tracked on purpose as portable deliverables.
+- `joysticks.json` (machine-local labels) and `autoconfig/` (saved profiles) are git-ignored: they are per-machine state, not part of the plugin.

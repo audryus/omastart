@@ -1,7 +1,8 @@
-# Per-machine joystick identities (labels + presets). The autoconfig/
-# profiles stay tracked on purpose: they are the portable deliverable
-# meant to be copied into RetroArch.
+# Per-machine joystick state: identities (labels + presets) and the
+# profiles saved from the configurator. Tracking them would ship one
+# user's binds to everyone and clash with their own saves on update.
 joysticks.json
+autoconfig/
 
 # Python bytecode from running joybind.py
 __pycache__/
