@@ -156,7 +156,8 @@ Item {
 
   function applyCapture(token, line) {
     if (token !== root.bindToken) return
-    var mBtn = line.match(/^BTN\s+(\d+)/)
+    // "h0up": D-pad hats bind like buttons (udev profile syntax).
+    var mBtn = line.match(/^BTN\s+(\d+|h\d+(?:up|down|left|right))/)
     var mAxis = line.match(/^AXIS\s*([+-]\d+)/)
     var list = root.targets()
     var key = root.currentKey
@@ -181,8 +182,10 @@ Item {
       root.dirty = true
       root.bindStep(root.bindIndex + 1)
     } else {
-      // Empty/garbled run: retry the same step.
+      // Empty/garbled run (timeout with everything held, or disconnect):
+      // retry with a hint instead of spinning silently.
       root.bindStep(root.bindIndex)
+      root.status += " — no input yet, release everything first."
     }
   }
 
@@ -273,32 +276,65 @@ Item {
     onExited: {
       var token = root.bindToken
       var lines = bindProc.collected.split("\n")
+      // Echo the raw stream so the log shows what Linux delivered, then
+      // honour only the BTN/AXIS result line (RAW lines are noise here).
+      for (var r = 0; r < lines.length; r++) {
+        if (lines[r].indexOf("RAW") === 0) console.log("[audryus.omastart] bind " + lines[r].trim())
+      }
       var last = ""
       for (var i = lines.length - 1; i >= 0; i--) {
-        if (lines[i].trim()) { last = lines[i].trim(); break }
+        var t = lines[i].trim()
+        if (t.indexOf("BTN") === 0 || t.indexOf("AXIS") === 0) { last = t; break }
       }
       root.applyCapture(token, last)
     }
   }
 
-  // Remap template (the user's hand-tuned file): our bound keys replace
-  // its input_player1_* lines, boilerplate (turbo etc.) is preserved.
-  // Empty when the template does not exist — then no remap is written.
-  readonly property string remapTemplatePath: Quickshell.env("HOME") + "/.config/retroarch/config/remaps/Mupen64Plus-Next/tuyi.rmp.bak"
-  readonly property string remapPath: Quickshell.env("HOME") + "/.config/retroarch/config/remaps/Mupen64Plus-Next/Mupen64Plus-Next.rmp"
+  // Core remap per preset (presets without a core write none):
+  // - n64: the user's hand-tuned template; our bound keys replace its
+  //   input_player1_* lines, boilerplate (turbo etc.) is preserved. No
+  //   template, no remap.
+  // - playstation: the core's own remap, with port 1 set to DualShock —
+  //   the default PS pad device has no sticks at all.
+  readonly property string remapsDir: Quickshell.env("HOME") + "/.config/retroarch/config/remaps"
+  readonly property string remapTemplatePath: {
+    if (root.presetId === "n64") return root.remapsDir + "/Mupen64Plus-Next/tuyi.rmp.bak"
+    if (root.presetId === "playstation") return root.remapsDir + "/Beetle PSX/Beetle PSX.rmp"
+    return ""
+  }
+  readonly property string remapPath: {
+    if (root.presetId === "n64") return root.remapsDir + "/Mupen64Plus-Next/Mupen64Plus-Next.rmp"
+    if (root.presetId === "playstation") return root.remapsDir + "/Beetle PSX/Beetle PSX.rmp"
+    return ""
+  }
   property string remapTemplate: ""
 
+  // RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1): Beetle PSX's DualShock.
+  readonly property string psxDualShock: "517"
+
   function buildRemap() {
-    if (!root.remapTemplate) return ""
+    if (root.presetId === "playstation") return root.buildPsxRemap()
+    if (root.presetId !== "n64" || !root.remapTemplate) return ""
     // Player btn/axis overrides come ONLY from our mapping (a stale line
     // pointing at a nonexistent button would silently kill that input,
     // which is what the dead 20-23 lines did); all other boilerplate
     // (turbo, analog_dpad_mode, ports…) is preserved as-is.
+    // Duplicate keys (same physical button as another, e.g. N64 B filling
+    // retropad A for menu nav) keep their identity: a template remap of
+    // them (btn_a = "21", C-Left, from a pad whose C-buttons were face
+    // buttons) would fire together with the original key.
+    var dups = {}
+    var list = root.targets()
+    for (var t = 0; t < list.length; t++) {
+      if (list[t].dupOf) dups[list[t].key] = true
+    }
     var out = []
     var lines = root.remapTemplate.split("\n")
     for (var j = 0; j < lines.length; j++) {
       var hit = lines[j].match(/^input_player1_([a-z0-9_]+?)_(btn|axis)\s*=/)
       if (hit) continue
+      var remapped = lines[j].match(/^input_player1_btn_([a-z0-9]+)\s*=/)
+      if (remapped && dups[remapped[1]]) continue
       out.push(lines[j])
     }
     var keys = []
@@ -310,6 +346,25 @@ Item {
       if (entry.kind === "axis") out.push("input_player1_" + keys[l] + "_axis = \"" + entry.value + "\"")
       else out.push("input_player1_" + keys[l] + "_btn = \"" + entry.value + "\"")
     }
+    return out.join("\n")
+  }
+
+  // Only the port-1 device changes; RetroArch fills in the rest if the
+  // file is new.
+  function buildPsxRemap() {
+    var line = "input_libretro_device_p1 = \"" + root.psxDualShock + "\""
+    var out = []
+    var found = false
+    var lines = root.remapTemplate ? root.remapTemplate.split("\n") : []
+    for (var i = 0; i < lines.length; i++) {
+      if (/^input_libretro_device_p1\s*=/.test(lines[i])) {
+        out.push(line)
+        found = true
+      } else {
+        out.push(lines[i])
+      }
+    }
+    if (!found) out.unshift(line)
     return out.join("\n")
   }
 
@@ -337,7 +392,12 @@ Item {
       }
       root.mapping = next
       root.dirty = false
-      root.status = "Loaded existing profile."
+      // Numbers captured under another driver point at other buttons.
+      var drv = String(text()).match(/^\s*input_driver\s*=\s*"([^"]*)"/m)
+      if (drv && drv[1] !== "udev")
+        root.status = "Profile made for " + drv[1] + "; RetroArch uses udev — Bind keys again."
+      else
+        root.status = "Loaded existing profile."
     }
   }
 
@@ -382,6 +442,48 @@ Item {
     onLoaded: root.loadCoreOpts(text())
   }
 
+  // PSX DualShock analog mode (Beetle PSX core option). Real DualShocks
+  // boot DIGITAL, where games ignore the sticks until the Analog button;
+  // the combo (L1+R1+Select by default) stands in for that button.
+  readonly property string psxOptPath: Quickshell.env("HOME") + "/.config/retroarch/config/Beetle PSX/Beetle PSX.opt"
+  readonly property var psxAnalogModes: [
+    { value: "enabled-analog", label: "Analog", hint: "Boots in analog mode; the combo switches to digital." },
+    { value: "enabled", label: "Digital", hint: "Boots in digital mode (sticks dead) until the combo is held." },
+    { value: "disabled", label: "Always analog", hint: "Locked to analog, no combo." }
+  ]
+  property string psxAnalogMode: "enabled"
+  property string psxOptText: ""
+
+  function loadPsxOpts(text) {
+    root.psxOptText = String(text || "")
+    var m = root.psxOptText.match(/^beetle_psx_analog_toggle\s*=\s*"([^"]*)"/m)
+    root.psxAnalogMode = m ? m[1] : "enabled"
+  }
+
+  function setPsxAnalogMode(value) {
+    root.psxAnalogMode = value
+    var line = "beetle_psx_analog_toggle = \"" + value + "\""
+    var lines = root.psxOptText ? root.psxOptText.split("\n") : []
+    var found = false
+    for (var i = 0; i < lines.length; i++) {
+      if (/^beetle_psx_analog_toggle\s*=/.test(lines[i])) { lines[i] = line; found = true }
+    }
+    if (!found) lines.push(line)
+    root.psxOptText = lines.join("\n")
+    // RetroArch rewrites this file on exit; last writer wins.
+    Util.execDetached("mkdir -p " + Util.shellQuote(root.psxOptPath.replace(/\/[^\/]*$/, ""))
+      + " && printf '%s' " + Util.shellQuote(root.psxOptText)
+      + " > " + Util.shellQuote(root.psxOptPath))
+  }
+
+  FileView {
+    id: psxOptFile
+    path: root.psxOptPath
+    watchChanges: false
+    printErrors: false
+    onLoaded: root.loadPsxOpts(text())
+  }
+
   function resetForDevice() {
     root.stopBinding(true)
     root.mapping = ({})
@@ -398,7 +500,12 @@ Item {
     root.presetId = preset
   }
 
-  onOpenChanged: if (open) { root.resetForDevice(); coreOptFile.reload() }
+  onOpenChanged: if (open) {
+    root.resetForDevice()
+    coreOptFile.reload()
+    psxOptFile.reload()
+    remapTemplateFile.reload()
+  }
   onDeviceNodeChanged: if (open) root.resetForDevice()
 
   PanelWindow {
@@ -671,6 +778,58 @@ Item {
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
               }
+            }
+          }
+
+          // PSX analog mode (Beetle PSX core option): without it the
+          // DualShock boots digital and games ignore the sticks.
+          Column {
+            width: 320
+            spacing: Style.space(6)
+            visible: root.presetId === "playstation"
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: "DualShock mode (Beetle PSX)"
+              color: Color.foreground
+              opacity: 0.6
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: true
+            }
+
+            Row {
+              spacing: Style.space(6)
+
+              Repeater {
+                model: root.psxAnalogModes
+                delegate: Button {
+                  required property var modelData
+                  readonly property bool current: modelData.value === root.psxAnalogMode
+                  height: Style.space(30)
+                  text: modelData.label
+                  bordered: !current
+                  selected: current
+                  onClicked: root.setPsxAnalogMode(modelData.value)
+                }
+              }
+            }
+
+            Text {
+              width: parent.width
+              textFormat: Text.PlainText
+              text: {
+                for (var i = 0; i < root.psxAnalogModes.length; i++) {
+                  if (root.psxAnalogModes[i].value === root.psxAnalogMode) return root.psxAnalogModes[i].hint
+                }
+                return ""
+              }
+              color: Color.foreground
+              opacity: 0.55
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
             }
           }
           }

@@ -2,7 +2,8 @@ import QtQuick
 import qs.Commons
 
 // Playstation schematic. Retropad positions: bottom=Cross->b,
-// right=Circle->a, left=Square->y, top=Triangle->x.
+// right=Circle->a, left=Square->y, top=Triangle->x. PS opens RetroArch's
+// menu, like the stock DualShock profiles.
 Item {
   id: root
 
@@ -20,8 +21,8 @@ Item {
     { key: "r", label: "R1" },
     { key: "l2", label: "L2" },
     { key: "r2", label: "R2" },
-    { key: "select", label: "Select" },
-    { key: "start", label: "Start" },
+    { key: "select", label: "Select / Share" },
+    { key: "start", label: "Start / Options" },
     { key: "l3", label: "L3" },
     { key: "r3", label: "R3" },
     { key: "l_x_minus", label: "Left Stick Left" },
@@ -31,7 +32,8 @@ Item {
     { key: "r_x_minus", label: "Right Stick Left" },
     { key: "r_x_plus", label: "Right Stick Right" },
     { key: "r_y_minus", label: "Right Stick Up" },
-    { key: "r_y_plus", label: "Right Stick Down" }
+    { key: "r_y_plus", label: "Right Stick Down" },
+    { key: "menu_toggle", label: "PS (RetroArch menu)" }
   ]
 
   readonly property color line: Util.alpha(Color.foreground, 0.35)
@@ -167,6 +169,13 @@ Item {
   Rectangle {
     x: 170; y: 66; width: 26; height: 9; radius: 4
     color: root.hot(["start"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+
+  // PS button.
+  Rectangle {
+    x: 157; y: 90; width: 12; height: 12; radius: 6
+    color: root.hot(["menu_toggle"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
 }

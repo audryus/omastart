@@ -2,3 +2,6 @@
 # profiles stay tracked on purpose: they are the portable deliverable
 # meant to be copied into RetroArch.
 joysticks.json
+
+# Python bytecode from running joybind.py
+__pycache__/

@@ -17,7 +17,9 @@ Item {
     // Canonical duplicate (Hyperkin profile): press the SAME physical B
     // button again — it fills retropad A too, otherwise B does nothing
     // in-game and menu nav breaks.
-    { key: "a", label: "B (press again)" },
+    // dupOf: the core remap must leave this key alone, or the template's
+    // own remap of it (btn_a -> C-Left) fires alongside B.
+    { key: "a", label: "B (press again)", dupOf: "y" },
     { key: "l", label: "L" },
     { key: "r", label: "R" },
     { key: "l2", label: "Z" },

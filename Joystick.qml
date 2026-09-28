@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -55,7 +56,7 @@ Item {
       if (line.indexOf("CFG:") !== 0) continue
       var parts = line.substring(4).split("|")
       if (parts.length < 4) continue
-      cfgs.push({ path: parts[0], device: parts[1], vidpid: parts[2], ours: parts[3] === "1" })
+      cfgs.push({ path: parts[0], devices: parts[1].split("^"), vidpids: parts[2].split(","), ours: parts[3] === "1" })
     }
     var next = {}
     var rows = Array.isArray(root.sticks) ? root.sticks : []
@@ -65,11 +66,21 @@ Item {
         var scanLines = scanProc.collected.split("\n")
         raw = root.rawForNode(scanLines, rows[j].node)
       } catch (e) { raw = "" }
+      // Profiles carry decimal ids, the scan hex ones.
+      var hex = String(rows[j].vidpid || "").split(":")
+      var decVidpid = hex.length === 2 && hex[0] && hex[1]
+        ? parseInt(hex[0], 16) + ":" + parseInt(hex[1], 16) : ""
       for (var k = 0; k < cfgs.length; k++) {
         if (cfgs[k].ours) continue
-        var sameDevice = cfgs[k].device !== "" && (cfgs[k].device === raw
-          || (root.normDevice(cfgs[k].device) === root.normDevice(raw)
-            && cfgs[k].vidpid === rows[j].vidpid && rows[j].vidpid !== "" && rows[j].vidpid !== ":"))
+        var sameIds = decVidpid !== "" && cfgs[k].vidpids.indexOf(decVidpid) >= 0
+        // Ours carries name + vid:pid, so only a profile matching both
+        // can tie with it (name alone, e.g. the DS3 Bluez one, scores lower).
+        var sameDevice = false
+        for (var d = 0; d < cfgs[k].devices.length; d++) {
+          var dev = cfgs[k].devices[d]
+          var sameName = dev !== "" && (dev === raw || root.normDevice(dev) === root.normDevice(raw))
+          if (sameName && (sameIds || decVidpid === "")) sameDevice = true
+        }
         if (sameDevice) { next[rows[j].key] = cfgs[k].path; break }
       }
     }
@@ -98,7 +109,10 @@ Item {
   Process {
     id: shadowProc
     property string collected: ""
-    command: ["bash", "-lc", "for f in /usr/share/libretro/autoconfig/udev/*.cfg ~/.config/retroarch/autoconfig/udev/*.cfg; do [ -f \"$f\" ] || continue; dev=$(grep -m1 -E '^input_device[[:space:]]*=' \"$f\" 2>/dev/null | sed 's/^[^=]*=[[:space:]]*\"\\(.*\\)\".*$/\\1/'); vid=$(grep -m1 -E '^input_vendor_id[[:space:]]*=' \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | head -1); pid=$(grep -m1 -E '^input_product_id[[:space:]]*=' \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | head -1); ours=$(grep -qm1 'OmaStart' \"$f\" 2>/dev/null && echo 1 || echo 0); echo \"CFG:$f|$dev|$vid:$pid|$ours\"; done"]
+    // Primary + alt names and vid:pid pairs: the stock DS4 profile only
+    // lists this pad (Sony Computer Entertainment…, 1356:1476) as alt3.
+    // Names are "^"-joined (they may contain commas: "HORI CO.,LTD.").
+    command: ["bash", "-lc", "for f in /usr/share/libretro/autoconfig/udev/*.cfg ~/.config/retroarch/autoconfig/udev/*.cfg; do [ -f \"$f\" ] || continue; devs=''; ids=''; for sfx in '' _alt1 _alt2 _alt3 _alt4 _alt5; do dev=$(grep -m1 -E \"^input_device$sfx[[:space:]]*=\" \"$f\" 2>/dev/null | sed 's/^[^=]*=[[:space:]]*\"\\(.*\\)\".*$/\\1/'); [ -n \"$dev\" ] && devs=\"$devs^$dev\"; vid=$(grep -m1 -E \"^input_vendor_id$sfx[[:space:]]*=\" \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | tail -1); pid=$(grep -m1 -E \"^input_product_id$sfx[[:space:]]*=\" \"$f\" 2>/dev/null | grep -o '[0-9][0-9]*' | tail -1); [ -n \"$vid$pid\" ] && ids=\"$ids,$vid:$pid\"; done; ours=$(grep -qm1 'OmaStart' \"$f\" 2>/dev/null && echo 1 || echo 0); echo \"CFG:$f|${devs#^}|${ids#,}|$ours\"; done"]
     stdout: SplitParser {
       onRead: function(data) { shadowProc.collected += data + "\n" }
     }
@@ -154,15 +168,24 @@ Item {
     return s || "joystick"
   }
 
+  readonly property string retroarchCfgPath: Quickshell.env("HOME") + "/.config/retroarch/retroarch.cfg"
+
   // Install this stick's local profile as THE RetroArch profile for the
   // device (pkexec prompt): for identical twins sharing one kernel name,
   // the last one modeled wins for both.
+  // Per-player joypad binds in retroarch.cfg (set from RetroArch's own
+  // menu) beat any autoconfig profile, so they are reset to "nul". That
+  // only sticks with RetroArch closed: it rewrites the file on exit.
   function makeModel(row) {
     if (!row || installProc.running) return
     var src = root.fsPluginDir + "/autoconfig/" + root.sanitizeFile(root.displayLabel(row)) + ".cfg"
     var dest = "/usr/share/libretro/autoconfig/udev/" + root.sanitizeFile(row.label) + ".cfg"
     installProc.command = ["bash", "-lc",
-      "pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest)]
+      "if pgrep -x retroarch >/dev/null; then notify-send 'OmaStart' 'Close RetroArch before setting the controller.'; exit 3; fi"
+      + " && pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest)
+      + " && sed -i -E 's/^(input_player[0-9]+_[a-z0-9_]+_(btn|axis)) = \".*\"$/\\1 = \"nul\"/' "
+      + Util.shellQuote(root.retroarchCfgPath)
+      + " && notify-send 'OmaStart' " + Util.shellQuote(root.displayLabel(row) + " installed for RetroArch.")]
     root.installing = true
     installProc.running = true
   }
@@ -440,7 +463,7 @@ Item {
                     acceptedButtons: Qt.NoButton
                     PanelToolTip {
                       visible: parent.containsMouse
-                      text: "Install this stick's profile as RetroArch's controller profile."
+                      text: "Install this stick's profile for RetroArch and reset retroarch.cfg's per-player binds so it wins. Close RetroArch first."
                     }
                   }
                 }
