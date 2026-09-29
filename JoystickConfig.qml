@@ -81,6 +81,23 @@ Item {
     return Array.isArray(root.presetButtons) ? root.presetButtons : []
   }
 
+  // Bound keys the current preset owns. The mapping can hold others: the
+  // prefill loads whatever the file had (e.g. SNES Select/X saved from
+  // another preset for the same stick), and they would otherwise be
+  // written back unseen — and the N64 core remap turns Select into
+  // C-Down, so a stale Select on the Z button fired both.
+  function presetKeys() {
+    var owned = {}
+    var list = root.targets()
+    for (var i = 0; i < list.length; i++) owned[list[i].key] = true
+    var keys = []
+    for (var k in root.mapping) {
+      if (owned[k] && root.mapping[k]) keys.push(k)
+    }
+    keys.sort()
+    return keys
+  }
+
   function bindingText(key) {
     var m = root.mapping[key]
     if (!m) return "—"
@@ -211,9 +228,7 @@ Item {
     var list = root.targets()
     var labels = {}
     for (var i = 0; i < list.length; i++) labels[list[i].key] = list[i].label
-    var keys = []
-    for (var k in root.mapping) keys.push(k)
-    keys.sort()
+    var keys = root.presetKeys()
     for (var j = 0; j < keys.length; j++) {
       var m = root.mapping[keys[j]]
       if (!m) continue
@@ -337,9 +352,7 @@ Item {
       if (remapped && dups[remapped[1]]) continue
       out.push(lines[j])
     }
-    var keys = []
-    for (var k in root.mapping) keys.push(k)
-    keys.sort()
+    var keys = root.presetKeys()
     for (var l = 0; l < keys.length; l++) {
       var entry = root.mapping[keys[l]]
       if (!entry) continue
@@ -646,6 +659,8 @@ Item {
               onClicked: {
                 root.presetId = modelData.id
                 root.stopBinding(true)
+                // Save rewrites the profile with this preset's keys only.
+                if (Object.keys(root.mapping).length > 0) root.dirty = true
               }
             }
           }
