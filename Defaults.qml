@@ -46,8 +46,10 @@ Item {
     return session + ":" + value
   }
 
-  // One bash run evaluates every `when:` (installed?) plus the four
-  // getters (current default?). Plain `if` lines on purpose: the shared
+  // One bash run evaluates every `when:` (installed?) and `checked:`
+  // (current default?), plus the four getters as a fallback for entries
+  // without `checked:` (menu ids don't always match the getter output,
+  // e.g. editor.vscode vs `code`). Plain `if` lines on purpose: the shared
   // guardScript prelude scans all installed packages, overkill for the
   // `omarchy-cmd-present` checks used here.
   function evalScript(skeleton) {
@@ -58,6 +60,8 @@ Item {
         script += "if { " + opt.when + "; } >/dev/null 2>&1; then echo 'k" + i + ":1'; else echo 'k" + i + ":0'; fi\n"
       else
         script += "echo 'k" + i + ":1'\n"
+      if (opt.checked)
+        script += "if { " + opt.checked + "; } >/dev/null 2>&1; then echo 'c" + i + ":1'; else echo 'c" + i + ":0'; fi\n"
     }
     for (var s = 0; s < root.sessions.length; s++) {
       var key = root.sessions[s].key
@@ -113,6 +117,7 @@ Item {
           icon: entry.icon || "",
           iconFont: entry.iconFont || "",
           when: entry.when || "",
+          checked: entry.checked || "",
           setAction: entry.action || "",
           installAction: installEntry ? (installEntry.action || "") : ""
         })
@@ -133,6 +138,7 @@ Item {
 
   function applyEval() {
     var installed = {}
+    var checked = {}
     var current = {}
     var lines = evalProc.collected.split("\n")
     for (var i = 0; i < lines.length; i++) {
@@ -144,7 +150,9 @@ Item {
         if (colon > 0) current[rest.substring(0, colon)] = rest.substring(colon + 1).trim()
       } else {
         var parts = line.split(":")
-        if (parts.length === 2) installed[parts[0]] = parts[1] === "1"
+        if (parts.length !== 2) continue
+        if (parts[0].charAt(0) === "c") checked[parts[0]] = parts[1] === "1"
+        else installed[parts[0]] = parts[1] === "1"
       }
     }
     var next = []
@@ -153,7 +161,9 @@ Item {
       var row = {}
       for (var k in opt) row[k] = opt[k]
       row.installed = installed["k" + j] !== false
-      row.isDefault = current[opt.session] === opt.value
+      row.isDefault = ("c" + j) in checked
+        ? checked["c" + j]
+        : current[opt.session] === opt.value
       next.push(row)
     }
     root.rows = next
