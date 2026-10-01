@@ -81,7 +81,8 @@ Item {
           var sameName = dev !== "" && (dev === raw || root.normDevice(dev) === root.normDevice(raw))
           if (sameName && (sameIds || decVidpid === "")) sameDevice = true
         }
-        if (sameDevice) { next[rows[j].key] = cfgs[k].path; break }
+        // Every tie counts: RetroArch picks one of them, not necessarily ours.
+        if (sameDevice) next[rows[j].key] = (next[rows[j].key] || []).concat([cfgs[k].path])
       }
     }
     root.shadows = next
@@ -98,11 +99,20 @@ Item {
     return ""
   }
 
+  // "mv a a.bak && mv b b.bak…" for every stock profile tying with ours.
+  function moveAsideCmd(key) {
+    var paths = root.shadows[key] || []
+    var parts = []
+    for (var i = 0; i < paths.length; i++)
+      parts.push("mv " + Util.shellQuote(paths[i]) + " " + Util.shellQuote(paths[i] + ".bak"))
+    return parts.join(" && ")
+  }
+
   function fixShadow(key) {
-    var path = root.shadows[key]
-    if (!path) return
-    // pkexec prompt; package updates may restore the file later.
-    Util.execDetached("pkexec mv " + Util.shellQuote(path) + " " + Util.shellQuote(path + ".bak"))
+    var cmd = root.moveAsideCmd(key)
+    if (!cmd) return
+    // pkexec prompt; package updates may restore the files later.
+    Util.execDetached("pkexec sh -c " + Util.shellQuote(cmd))
     Qt.callLater(root.scanShadows, 3000)
   }
 
@@ -180,9 +190,15 @@ Item {
     if (!row || installProc.running) return
     var src = root.fsPluginDir + "/autoconfig/" + root.sanitizeFile(root.displayLabel(row)) + ".cfg"
     var dest = "/usr/share/libretro/autoconfig/udev/" + root.sanitizeFile(row.label) + ".cfg"
+    // Stock profiles with our name + vid:pid tie with ours and RetroArch
+    // may load theirs (seen: "Generic USB Gamepad" beat "OmaStart USB
+    // gamepad"), so they go aside in the same polkit prompt.
+    var rootCmd = "cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest)
+    var aside = root.moveAsideCmd(row.key)
+    if (aside) rootCmd += " && " + aside
     installProc.command = ["bash", "-lc",
       "if pgrep -x retroarch >/dev/null; then notify-send 'OmaStart' 'Close RetroArch before setting the controller.'; exit 3; fi"
-      + " && pkexec cp " + Util.shellQuote(src) + " " + Util.shellQuote(dest)
+      + " && pkexec sh -c " + Util.shellQuote(rootCmd)
       + " && sed -i -E 's/^(input_player[0-9]+_[a-z0-9_]+_(btn|axis)) = \".*\"$/\\1 = \"nul\"/' "
       + Util.shellQuote(root.retroarchCfgPath)
       + " && notify-send 'OmaStart' " + Util.shellQuote(root.displayLabel(row) + " installed for RetroArch.")]
@@ -480,7 +496,7 @@ Item {
                     acceptedButtons: Qt.NoButton
                     PanelToolTip {
                       visible: parent.containsMouse
-                      text: "A stock profile shadows ours and RetroArch ignores it. Click to move it aside (.bak)."
+                      text: "Stock profiles tie with ours and RetroArch may load theirs. Click to move them aside (.bak); Set Retroarch Controller also does it."
                     }
                   }
                 }
