@@ -50,7 +50,7 @@ Opens from the footer (the main popup closes first). One window, left section me
 
 ### Joystick binding → RetroArch plug-and-play
 
-`JoystickConfig.qml` opens a floating window (Esc/X only): preset schematics in `presets/` (**Megadrive, N64, Playstation, SNES, Steam, Xbox**, alphabetical) with the active control highlighted, a guided **Bind keys** flow (single rows are clickable too, **Skip** supported), and **Save**.
+`JoystickConfig.qml` opens a floating window (Esc/X only): preset schematics in `presets/` (**Game Boy** — GB and GBC share buttons —, **GBA**, **Megadrive, N64, Playstation, SNES, Steam, Xbox**, alphabetical) with the active control highlighted, a guided **Bind keys** flow (single rows are clickable too, **Skip** supported), and **Save**.
 
 - Input capture is `joybind.py` (stdlib only): baselines the stick for 200ms so resting trigger axes don't false-fire, then reports the first fresh `BTN n` / `AXIS ±n`. D-pad directions are validated (`_minus` only accepts `-N`).
 - Capture reads joydev (`/dev/input/jsX`), which numbers buttons and axes like RetroArch's **udev** joypad driver (the one this targets). D-pad hats, which joydev reports as plain axes (6/7 on a DS4), are written as `h0up`/`h0down`/`h0left`/`h0right`, like the stock profiles. A profile made for another driver is flagged for rebinding.

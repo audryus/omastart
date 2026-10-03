@@ -151,7 +151,7 @@ Item {
   property string configKey: ""
 
   readonly property var presetShort: ({
-    megadrive: "Mega", n64: "N64", playstation: "PS",
+    gameboy: "GB", gba: "GBA", megadrive: "Mega", n64: "N64", playstation: "PS",
     snes: "SNES", steam: "Steam", xbox: "Xbox"
   })
 

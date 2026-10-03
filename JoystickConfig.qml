@@ -35,6 +35,8 @@ Item {
   }
 
   readonly property var presets: [
+    { id: "gameboy", label: "Game Boy", file: "presets/GameBoy.qml" },
+    { id: "gba", label: "GBA", file: "presets/GBA.qml" },
     { id: "megadrive", label: "Megadrive", file: "presets/Megadrive.qml" },
     { id: "n64", label: "N64", file: "presets/N64.qml" },
     { id: "playstation", label: "Playstation", file: "presets/Playstation.qml" },
@@ -631,14 +633,16 @@ Item {
           }
         }
 
-        // Preset selector (alphabetical).
-        Row {
+        // Preset selector (alphabetical). Flow: eight presets no longer
+        // fit one line of the card.
+        Flow {
           id: presetRow
           width: parent.width
           spacing: Style.space(6)
 
           Text {
-            anchors.verticalCenter: parent.verticalCenter
+            height: Style.space(30)
+            verticalAlignment: Text.AlignVCenter
             textFormat: Text.PlainText
             text: "Preset"
             color: Color.foreground
