@@ -8,7 +8,6 @@
   "kinds": [
     "bar-widget"
   ],
-  "keepLoaded": true,
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },

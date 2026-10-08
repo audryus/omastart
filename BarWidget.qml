@@ -35,24 +35,24 @@ BarWidget {
     onPressed: function(b) { if (b === Qt.RightButton) return; root.toggle() }
   }
 
-  Timer {
-    id: focusTimer
-    interval: 50
-    repeat: true
-    onTriggered: {
-      search.forceActiveFocus()
-      if (search.activeFocus) stop()
-    }
-  }
-
   // Floating settings window (same dir, no import needed). The widget
   // closes itself when Settings is picked, leaving only this open.
-  Settings {
-    id: settingsWindow
-    open: root.settingsOpen
-    bar: root.bar
-    menu: root
-    onRequestClose: root.settingsOpen = false
+  // Only instantiated while open: its pages spawn scans (pacman, mise,
+  // lpstat...) and file watchers on creation. Kept alive while a child
+  // flow runs (zenity picker, printer discovery, joystick config/install)
+  // so closing mid-flow doesn't kill it. Last section survives reloads.
+  property string settingsSection: "general"
+  LazyLoader {
+    id: settingsLoader
+    active: root.settingsOpen || (settingsLoader.item ? settingsLoader.item.picking : false)
+    Settings {
+      open: root.settingsOpen
+      bar: root.bar
+      menu: root
+      section: root.settingsSection
+      onSectionChanged: root.settingsSection = section
+      onRequestClose: root.settingsOpen = false
+    }
   }
 
   // Favorite folders (General section + right pane): JSON array of
@@ -104,136 +104,149 @@ BarWidget {
     onFileChanged: reload()
   }
 
-  function resetMenu() {
-    root.filterText = ""
-    leftPane.resetNav()
-    leftPane.refreshUpdate()
+  onMenuOpenChanged: {
+    if (menuOpen) {
+      root.filterText = ""
+      if (root.bar) root.bar.requestPopout(root.coordinatorKey)
+    } else if (root.bar && root.bar.activePopout === root.coordinatorKey) {
+      root.bar.releasePopout(root.coordinatorKey)
+    }
   }
 
+  // Only instantiated while open, so the app list, icons and menu file
+  // watchers don't sit in memory between summons. Each open starts fresh
+  // (nav at the root, update status re-checked).
   // NOTE: era PopupCard (xdg-popup), mas com follow_mouse=1 o Hyprland so
   // entrega o teclado a janela sob o cursor — o cursor fica na barra, a barra
   // tem keyboardFocus None, e o digitado se perdia (so funcionava com o mouse
   // em cima do popup). PanelWindow com Exclusive puxa o foco independente do
   // mouse, igual ao Menu.qml oficial.
-  PanelWindow {
-    id: panel
-    visible: root.menuOpen
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
-    WlrLayershell.namespace: "omastart-menu"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-    exclusionMode: ExclusionMode.Ignore
+  LazyLoader {
+    active: root.menuOpen
 
-    onVisibleChanged: {
-      if (visible) {
-        root.resetMenu()
-        focusTimer.restart()
-        if (root.bar) root.bar.requestPopout(root.coordinatorKey)
-      } else {
-        focusTimer.stop()
-        if (root.bar && root.bar.activePopout === root.coordinatorKey) root.bar.releasePopout(root.coordinatorKey)
+    PanelWindow {
+      id: panel
+      visible: true
+      anchors { top: true; bottom: true; left: true; right: true }
+      color: "transparent"
+      WlrLayershell.namespace: "omastart-menu"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+      exclusionMode: ExclusionMode.Ignore
+
+      Component.onCompleted: {
+        leftPane.refreshUpdate()
+        focusTimer.start()
       }
-    }
 
-    // Click outside closes.
-    MouseArea {
-      anchors.fill: parent
-      onClicked: root.close()
-    }
-
-    BorderSurface {
-      id: card
-      width: Math.min(Style.space(642), panel.width - Style.gapsOut * 2)
-      height: Style.space(726)
-      //height: content.implicitHeight + contentTopInset + contentBottomInset
-      // Anchored to the button like PopupCard: centered on it, clamped to
-      // the screen. The bar strip and this fullscreen overlay share the same
-      // screen origin, so the button's x inside the bar window maps 1:1.
-      x: {
-        var cx = panel.width / 2
-        var win = button.QsWindow.window
-        if (win && win.contentItem) {
-          var p = button.mapToItem(win.contentItem, button.width / 2, 0)
-          cx = p.x
+      Timer {
+        id: focusTimer
+        interval: 50
+        repeat: true
+        onTriggered: {
+          search.forceActiveFocus()
+          if (search.activeFocus) stop()
         }
-        return Math.max(Style.gapsOut, Math.min(cx - width / 2, panel.width - width - Style.gapsOut))
       }
-      y: {
-        if (root.bar && root.bar.position === "bottom") return panel.height - height - root.barSize - Style.gapsOut
-        if (root.bar && (root.bar.position === "left" || root.bar.position === "right")) {
-          var winY = button.QsWindow.window
-          var cy = panel.height / 2
-          if (winY && winY.contentItem) cy = button.mapToItem(winY.contentItem, 0, button.height / 2).y
-          return Math.max(Style.gapsOut, Math.min(cy - height / 2, panel.height - height - Style.gapsOut))
-        }
-        return root.barSize + Style.gapsOut
-      }
-      color: Color.popups.background
-      borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.popups.border, Color.popups.border, Math.max(1, Style.space(2)))
-      padding: Style.spacing.popupPadding
-      radius: Style.cornerRadius
 
-      MouseArea { anchors.fill: parent; onClicked: {} }
-
-      Item {
-        id: content
+      // Click outside closes.
+      MouseArea {
         anchors.fill: parent
-        anchors.topMargin: card.contentTopInset
-        anchors.rightMargin: card.contentRightInset
-        anchors.bottomMargin: card.contentBottomInset
-        anchors.leftMargin: card.contentLeftInset
+        onClicked: root.close()
+      }
 
-        TextField {
-          id: search
-          anchors.top: parent.top
-          anchors.left: parent.left
-          anchors.right: parent.right
-          focus: true
-          activeFocusOnTab: true
-          placeholderText: "Buscar..."
-          text: root.filterText
-          onTextEdited: if (text !== root.filterText) root.filterText = text
-          onAccepted: console.log("buscar:", text)
-          Keys.onEscapePressed: root.close()
-          onVisibleChanged: if (visible) Qt.callLater(function() { forceActiveFocus() })
-        }
-
-
-        MenuFooter {
-          id: footer
-          bar: root.bar
-          onCloseRequested: root.close()
-          onSettingsRequested: {
-            root.close()
-            root.settingsOpen = true
+      BorderSurface {
+        id: card
+        width: Math.min(Style.space(642), panel.width - Style.gapsOut * 2)
+        height: Style.space(726)
+        //height: content.implicitHeight + contentTopInset + contentBottomInset
+        // Anchored to the button like PopupCard: centered on it, clamped to
+        // the screen. The bar strip and this fullscreen overlay share the same
+        // screen origin, so the button's x inside the bar window maps 1:1.
+        x: {
+          var cx = panel.width / 2
+          var win = button.QsWindow.window
+          if (win && win.contentItem) {
+            var p = button.mapToItem(win.contentItem, button.width / 2, 0)
+            cx = p.x
           }
+          return Math.max(Style.gapsOut, Math.min(cx - width / 2, panel.width - width - Style.gapsOut))
         }
-        // Middle section between search and footer (siblings, so all
-        // anchors stay parent-or-sibling).
+        y: {
+          if (root.bar && root.bar.position === "bottom") return panel.height - height - root.barSize - Style.gapsOut
+          if (root.bar && (root.bar.position === "left" || root.bar.position === "right")) {
+            var winY = button.QsWindow.window
+            var cy = panel.height / 2
+            if (winY && winY.contentItem) cy = button.mapToItem(winY.contentItem, 0, button.height / 2).y
+            return Math.max(Style.gapsOut, Math.min(cy - height / 2, panel.height - height - Style.gapsOut))
+          }
+          return root.barSize + Style.gapsOut
+        }
+        color: Color.popups.background
+        borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.popups.border, Color.popups.border, Math.max(1, Style.space(2)))
+        padding: Style.spacing.popupPadding
+        radius: Style.cornerRadius
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
         Item {
-          id: body
-          anchors.top: search.bottom
-          anchors.topMargin: Style.space(14)
-          anchors.bottom: footer.top
-          anchors.bottomMargin: Style.space(14)
-          anchors.left: parent.left
-          anchors.right: parent.right
+          id: content
+          anchors.fill: parent
+          anchors.topMargin: card.contentTopInset
+          anchors.rightMargin: card.contentRightInset
+          anchors.bottomMargin: card.contentBottomInset
+          anchors.leftMargin: card.contentLeftInset
 
-          MenuLeftPane {
-            id: leftPane
-            bar: root.bar
-            filterText: root.filterText
-            onCloseRequested: root.close()
+          TextField {
+            id: search
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            focus: true
+            activeFocusOnTab: true
+            placeholderText: "Buscar..."
+            text: root.filterText
+            onTextEdited: if (text !== root.filterText) root.filterText = text
+            onAccepted: console.log("buscar:", text)
+            Keys.onEscapePressed: root.close()
+            onVisibleChanged: if (visible) Qt.callLater(function() { forceActiveFocus() })
           }
-          MenuRightPane {
+
+
+          MenuFooter {
+            id: footer
             bar: root.bar
-            favorites: root.favorites
             onCloseRequested: root.close()
+            onSettingsRequested: {
+              root.close()
+              root.settingsOpen = true
+            }
+          }
+          // Middle section between search and footer (siblings, so all
+          // anchors stay parent-or-sibling).
+          Item {
+            id: body
+            anchors.top: search.bottom
+            anchors.topMargin: Style.space(14)
+            anchors.bottom: footer.top
+            anchors.bottomMargin: Style.space(14)
+            anchors.left: parent.left
+            anchors.right: parent.right
+
+            MenuLeftPane {
+              id: leftPane
+              bar: root.bar
+              filterText: root.filterText
+              onCloseRequested: root.close()
+            }
+            MenuRightPane {
+              bar: root.bar
+              favorites: root.favorites
+              onCloseRequested: root.close()
+            }
           }
         }
       }
     }
   }
-
 }
