@@ -42,6 +42,8 @@ Press `Super + Space` (or `Super + Escape`) to confirm the traditional menu stil
 
 Opens from the footer (the main popup closes first). One window, left section menu, `Esc`/outside-click/`X` to close.
 
+![OmaStart settings window](assets/settings.png)
+
 - **General → Favorite folders** — pick folders with a zenity dialog (same pattern as the wallweave plugin), persisted as a JSON array in `~/.local/state/omarchy/settings/omastart-favorites.json`. Each entry has a Remove button. Favorites appear in the places column after a divider, shown by basename (the full path shows in the mouse actions card on hover).
 - **Defaults** — Agent, Browser, Terminal and Editor as radio lists with a filter field. Options, visibility rules and set actions are derived at runtime from the merged menu (your overrides apply). The current default is selected; clicking an uninstalled option runs its traditional installer. State is evaluated in a single bash pass and watched live on disk.
 - **Printers** — installed CUPS printers (`lpstat`) with an Online/Offline indicator. Reachability is probed only while the page is visible (fast ticks when something is offline, slow otherwise); USB printers are matched via `lsusb`, network ones via TCP. Offline network printers get a **Refresh** button that re-discovers them over mDNS and updates a moved IP via polkit. **Find network printers** opens a discovery window (`driverless` + `_ipp`/`_ipps`/`_printer`/JetDirect mDNS, minus already-installed ones) with per-row **Install** buttons (`lpadmin` through the sudo floating terminal, `everywhere` for IPP, raw otherwise).
