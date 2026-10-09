@@ -1,6 +1,6 @@
 # OmaStart — custom start menu for Omarchy
 
-OmaStart (`audryus.omastart`) is a bar-widget start menu for the [Omarchy](https://omarchy.org/) shell (Quickshell). It opens under the bar button: live search, an A–Z application list, a Windows-7-style Learn/Trigger/Style tree, an update status row, a places column with per-mouse-button actions, a system footer, and a full Settings window (favorites, defaults, printers, uninstall, joystick setup with RetroArch binding).
+OmaStart (`audryus.omastart`) is a bar-widget start menu for the [Omarchy](https://omarchy.org/) shell (Quickshell). It opens under the bar button: live search, an A–Z application list, a Windows-7-style Learn/Trigger/Style tree, an update status row, a places column with per-mouse-button actions, a system footer, and a full Settings window (favorites, defaults, printers, uninstall, joystick setup with RetroArch binding, hotkeys).
 
 ![OmaStart main menu](assets/main_menu.png)
 
@@ -49,10 +49,11 @@ Opens from the footer (the main popup closes first). One window, left section me
 - **Printers** — installed CUPS printers (`lpstat`) with an Online/Offline indicator. Reachability is probed only while the page is visible (fast ticks when something is offline, slow otherwise); USB printers are matched via `lsusb`, network ones via TCP. Offline network printers get a **Refresh** button that re-discovers them over mDNS and updates a moved IP via polkit. **Find network printers** opens a discovery window (`driverless` + `_ipp`/`_ipps`/`_printer`/JetDirect mDNS, minus already-installed ones) with per-row **Install** buttons (`lpadmin` through the sudo floating terminal, `everywhere` for IPP, raw otherwise).
 - **Uninstall** — flat A–Z installed apps with a filter and per-row **Remove** (confirm dialog, then `omarchy-remove-launcher-entry`, exactly like the original menu), refreshing live via `DesktopEntries`. Below it, the obscure **preinstalls** itemized (packages, web apps, TUIs, CLI stubs — the pieces `omarchy-remove-preinstalls` handles in bulk) each with its own remover, plus a **Mise** group (`mise ls --json`, removed with `mise unuse` + `mise uninstall -a` using exact registry ids like `http:muse`).
 - **Joystick** — connected sticks from `/dev/input/js*` with USB vid:pid and product strings, a Refresh button, and per-stick **Configure**. Since clones carry no serials, identity is `vid:pid` + interface with deterministic numbering (`joysticks.json`, git-ignored), editable labels, and a shown preset (or `not configured yet`). A **Fix stock** button appears when a stock autoconfig shadows yours; **Model** installs your profile as RetroArch's.
+- **Hotkeys** — Omarchy's default binds (`/usr/share/omarchy/default/hypr/bindings/*.lua`) merged with your own, searchable by key, command and label. Customs are listed first; defaults can be overridden (and **Reset**), customs edited or removed, and **Add** opens a key-capture window that blocks bare modifiers and already-taken sequences. Saves rewrite only a managed `-- omastart hotkeys:begin/end` block in `~/.config/hypr/bindings.lua` (everything else is kept verbatim) and run `hyprctl reload`. Loop-generated binds (workspaces, panels) can't be parsed statically, so they keep working but aren't listed.
 
 ### Joystick binding → RetroArch plug-and-play
 
-`JoystickConfig.qml` opens a floating window (Esc/X only): preset schematics in `presets/` (**Game Boy** — GB and GBC share buttons —, **GBA**, **Megadrive, N64, Playstation, SNES, Steam, Xbox**, alphabetical) with the active control highlighted, a guided **Bind keys** flow (single rows are clickable too, **Skip** supported), and **Save**.
+`JoystickConfig.qml` opens a floating window (Esc/X only): preset schematics in `presets/` (**Game Boy** — GB and GBC share buttons —, **GBA**, **Megadrive, N64, NDS, Playstation, SNES, Steam, Xbox**, alphabetical) with the active control highlighted, a guided **Bind keys** flow (single rows are clickable too, **Skip** supported), and **Save**.
 
 - Input capture is `joybind.py` (stdlib only): baselines the stick for 200ms so resting trigger axes don't false-fire, then reports the first fresh `BTN n` / `AXIS ±n`. D-pad directions are validated (`_minus` only accepts `-N`).
 - Capture reads joydev (`/dev/input/jsX`), which numbers buttons and axes like RetroArch's **udev** joypad driver (the one this targets). D-pad hats, which joydev reports as plain axes (6/7 on a DS4), are written as `h0up`/`h0down`/`h0left`/`h0right`, like the stock profiles. A profile made for another driver is flagged for rebinding.
@@ -73,11 +74,14 @@ Opens from the footer (the main popup closes first). One window, left section me
 | `Printers.qml`, `Discovery.qml` | Printers + network discovery |
 | `Uninstall.qml` | Apps, preinstalls, mise removal |
 | `Joystick.qml`, `JoystickConfig.qml` | Stick list/identities + binding window |
+| `Hotkeys.qml`, `HotkeyEdit.qml` | Hotkey list + key-capture/edit window |
 | `presets/` | Per-controller schematics + button maps |
 | `joybind.py` | One-shot joystick event reader |
 | `System.js`, `MenuModel.js` | Menu parsing/merging/filtering (unit-testable with node) |
+| `Hotkeys.js` | Lua bind parsing, merge view, managed-block read/write (unit-testable with node) |
 | `Menu.qml` | Upstream reference copy (untouched) |
 | `Makefile` | `log`, `journal`, `validate`, `rescan`, `restart` helpers |
+| `CLAUDE.md` | Architecture and conventions for Claude Code |
 
 `make log` tails the current shell log filtered to this plugin; `make journal` does the same on the journal; `make validate` runs `omarchy plugin validate .`.
 
