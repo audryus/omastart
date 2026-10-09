@@ -39,6 +39,7 @@ Item {
     { id: "gba", label: "GBA", file: "presets/GBA.qml" },
     { id: "megadrive", label: "Megadrive", file: "presets/Megadrive.qml" },
     { id: "n64", label: "N64", file: "presets/N64.qml" },
+    { id: "nds", label: "NDS", file: "presets/NDS.qml" },
     { id: "playstation", label: "Playstation", file: "presets/Playstation.qml" },
     { id: "snes", label: "SNES", file: "presets/SNES.qml" },
     { id: "steam", label: "Steam", file: "presets/Steam.qml" },
@@ -633,7 +634,7 @@ Item {
           }
         }
 
-        // Preset selector (alphabetical). Flow: eight presets no longer
+        // Preset selector (alphabetical). Flow: the presets no longer
         // fit one line of the card.
         Flow {
           id: presetRow

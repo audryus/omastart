@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Commons
 
-// Steam Deck schematic (face controls subset; trackpads decorative).
+// Steam Deck schematic (trackpads and screen decorative).
 // Same retropad positions as Xbox: bottom=A->b, right=B->a,
 // left=X->y, top=Y->x.
 Item {
@@ -45,74 +45,90 @@ Item {
     return keys.indexOf(root.activeKey) >= 0
   }
 
-  // Wide body + trackpads (decorative).
-  Rectangle {
-    x: 25; y: 45; width: 270; height: 105; radius: 40
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 37; y: 78; width: 44; height: 44; radius: 8
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 239; y: 78; width: 44; height: 44; radius: 8
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  Text {
-    x: 37; y: 124; width: 44; horizontalAlignment: Text.AlignHCenter
-    text: "pad"; color: Color.foreground; opacity: 0.45
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-  Text {
-    x: 239; y: 124; width: 44; horizontalAlignment: Text.AlignHCenter
-    text: "pad"; color: Color.foreground; opacity: 0.45
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-
-  // Shoulders + triggers.
+  // Shoulders (LB/RB) with triggers (LT/RT) behind them.
   Repeater {
     model: [
-      { key: "l", x: 100 }, { key: "r", x: 186 },
-      { key: "l2", x: 100, y: 0 }, { key: "r2", x: 186, y: 0 }
+      { key: "l2", x: 34, y: 22 }, { key: "r2", x: 252, y: 22 },
+      { key: "l", x: 34, y: 33 }, { key: "r", x: 252, y: 33 }
     ]
     delegate: Rectangle {
       required property var modelData
-      x: modelData.x; y: modelData.y !== undefined ? 24 : 36
+      x: modelData.x; y: modelData.y
       width: 34; height: 9; radius: 4
       color: root.hot([modelData.key]) ? Color.accent : root.dim
       border.width: 1; border.color: root.line
     }
   }
+  Text {
+    x: 26; y: 8; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "LB/LT"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+  Text {
+    x: 244; y: 8; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "RB/RT"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
 
-  // D-pad left-center.
+  // Wide body, center screen, trackpads under the controls.
   Rectangle {
-    x: 96; y: 96; width: 40; height: 14
+    x: 10; y: 42; width: 300; height: 120; radius: 40
+    color: root.dim; border.width: 1; border.color: root.line
+  }
+  Rectangle {
+    x: 116; y: 54; width: 88; height: 96; radius: 4
+    color: Util.alpha(Color.foreground, 0.03); border.width: 1; border.color: root.line
+  }
+  Repeater {
+    model: [{ x: 46 }, { x: 234 }]
+    delegate: Rectangle {
+      required property var modelData
+      x: modelData.x; y: 108; width: 40; height: 40; radius: 8
+      color: root.dim; border.width: 1; border.color: root.line
+    }
+  }
+
+  // View (left) / Menu (right) above the controls.
+  Rectangle {
+    x: 56; y: 49; width: 20; height: 8; radius: 4
+    color: root.hot(["select"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+  Rectangle {
+    x: 244; y: 49; width: 20; height: 8; radius: 4
+    color: root.hot(["start"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+
+  // D-pad, far left.
+  Rectangle {
+    x: 23; y: 69; width: 36; height: 13
     color: root.hot(["left", "right"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 109; y: 83; width: 14; height: 40
+    x: 34.5; y: 57.5; width: 13; height: 36
     color: root.hot(["up", "down"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
 
-  // Face diamond: right=B, bottom=A, left=X, top=Y.
+  // Face diamond, far right: right=B, bottom=A, left=X, top=Y.
   Repeater {
     model: [
-      { key: "a", dx: 19, dy: 0, cap: "B" },
-      { key: "b", dx: 0, dy: 19, cap: "A" },
-      { key: "y", dx: -19, dy: 0, cap: "X" },
-      { key: "x", dx: 0, dy: -19, cap: "Y" }
+      { key: "a", dx: 15, dy: 0, cap: "B" },
+      { key: "b", dx: 0, dy: 15, cap: "A" },
+      { key: "y", dx: -15, dy: 0, cap: "X" },
+      { key: "x", dx: 0, dy: -15, cap: "Y" }
     ]
     delegate: Item {
       required property var modelData
-      x: 207 + modelData.dx - 10
-      y: 103 - 10 + modelData.dy
-      width: 20; height: 20
+      x: 279 + modelData.dx - 9
+      y: 76 + modelData.dy - 9
+      width: 18; height: 18
 
       Rectangle {
         anchors.fill: parent
-        radius: 10
+        radius: 9
         color: root.hot([modelData.key]) ? Color.accent : root.dim
         border.width: 1; border.color: root.line
       }
@@ -127,15 +143,15 @@ Item {
     }
   }
 
-  // Sticks.
+  // Sticks, inner side next to the screen.
   Repeater {
     model: [
-      { keys: ["l_x_minus", "l_x_plus", "l_y_minus", "l_y_plus", "l3"], x: 140, cap: "L3" },
-      { keys: ["r_x_minus", "r_x_plus", "r_y_minus", "r_y_plus", "r3"], x: 172, cap: "R3" }
+      { keys: ["l_x_minus", "l_x_plus", "l_y_minus", "l_y_plus", "l3"], cx: 90, cap: "L3" },
+      { keys: ["r_x_minus", "r_x_plus", "r_y_minus", "r_y_plus", "r3"], cx: 230, cap: "R3" }
     ]
     delegate: Item {
       required property var modelData
-      x: modelData.x; y: 82
+      x: modelData.cx - 13; y: 63
       width: 26; height: 26
 
       Rectangle {
@@ -157,17 +173,5 @@ Item {
         font.pixelSize: 9; font.family: Style.font.family
       }
     }
-  }
-
-  // View / Menu pills.
-  Rectangle {
-    x: 146; y: 122; width: 22; height: 8; radius: 4
-    color: root.hot(["select"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 172; y: 122; width: 22; height: 8; radius: 4
-    color: root.hot(["start"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
   }
 }

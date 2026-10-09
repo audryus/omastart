@@ -44,79 +44,88 @@ Item {
     return keys.indexOf(root.activeKey) >= 0
   }
 
-  // Body + grips.
-  Rectangle {
-    x: 55; y: 40; width: 210; height: 100; radius: 34
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 62; y: 108; width: 36; height: 62; radius: 16; rotation: 14
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 222; y: 108; width: 36; height: 62; radius: 16; rotation: -14
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  // Guide button.
-  Rectangle {
-    x: 150; y: 56; width: 20; height: 20; radius: 10
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-
-  // Shoulders + triggers.
+  // Shoulders (LB/RB) with triggers (LT/RT) behind them.
   Repeater {
     model: [
-      { key: "l", x: 88 }, { key: "r", x: 198 },
-      { key: "l2", x: 88, y: 0 }, { key: "r2", x: 198, y: 0 }
+      { key: "l2", x: 80, y: 16 }, { key: "r2", x: 206, y: 16 },
+      { key: "l", x: 80, y: 29 }, { key: "r", x: 206, y: 29 }
     ]
     delegate: Rectangle {
       required property var modelData
-      x: modelData.x; y: modelData.y !== undefined ? 18 : 30
+      x: modelData.x; y: modelData.y
       width: 34; height: 10; radius: 5
       color: root.hot([modelData.key]) ? Color.accent : root.dim
       border.width: 1; border.color: root.line
     }
   }
   Text {
-    x: 80; y: 4; width: 50; horizontalAlignment: Text.AlignHCenter
+    x: 72; y: 2; width: 50; horizontalAlignment: Text.AlignHCenter
     text: "LB/LT"; color: Color.foreground; opacity: 0.6
     font.pixelSize: 9; font.family: Style.font.family
   }
   Text {
-    x: 190; y: 4; width: 50; horizontalAlignment: Text.AlignHCenter
+    x: 198; y: 2; width: 50; horizontalAlignment: Text.AlignHCenter
     text: "RB/RT"; color: Color.foreground; opacity: 0.6
     font.pixelSize: 9; font.family: Style.font.family
   }
 
-  // D-pad (lower-left on Xbox).
+  // Grips, clipped at the body's bottom edge (translucent fills would
+  // otherwise show their tops through the body).
+  Item {
+    x: 0; y: 137; width: 320; height: 53
+    clip: true
+
+    Rectangle {
+      x: 64; y: 92 - 137; width: 40; height: 82; radius: 18; rotation: 16
+      color: root.dim; border.width: 1; border.color: root.line
+    }
+    Rectangle {
+      x: 216; y: 92 - 137; width: 40; height: 82; radius: 18; rotation: -16
+      color: root.dim; border.width: 1; border.color: root.line
+    }
+  }
+
+  // Body.
   Rectangle {
-    x: 84; y: 104; width: 44; height: 15
+    x: 50; y: 38; width: 220; height: 102; radius: 30
+    color: root.dim; border.width: 1; border.color: root.line
+  }
+
+  // Guide button, top center.
+  Rectangle {
+    x: 150; y: 46; width: 20; height: 20; radius: 10
+    color: root.dim; border.width: 1; border.color: root.line
+  }
+
+  // D-pad, lower-left inner.
+  Rectangle {
+    x: 112; y: 103.5; width: 38; height: 13
     color: root.hot(["left", "right"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 98; y: 90; width: 15; height: 44
+    x: 124.5; y: 91; width: 13; height: 38
     color: root.hot(["up", "down"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
 
-  // Face diamond: right=B, bottom=A, left=X, top=Y.
+  // Face diamond, upper-right: right=B, bottom=A, left=X, top=Y.
   Repeater {
     model: [
-      { key: "a", dx: 20, dy: 0, cap: "B" },
-      { key: "b", dx: 0, dy: 20, cap: "A" },
-      { key: "y", dx: -20, dy: 0, cap: "X" },
-      { key: "x", dx: 0, dy: -20, cap: "Y" }
+      { key: "a", dx: 18, dy: 0, cap: "B" },
+      { key: "b", dx: 0, dy: 18, cap: "A" },
+      { key: "y", dx: -18, dy: 0, cap: "X" },
+      { key: "x", dx: 0, dy: -18, cap: "Y" }
     ]
     delegate: Item {
       required property var modelData
-      x: 218 + modelData.dx - 11
-      y: 82 - 11 + modelData.dy
-      width: 22; height: 22
+      x: 224 + modelData.dx - 10
+      y: 74 + modelData.dy - 10
+      width: 20; height: 20
 
       Rectangle {
         anchors.fill: parent
-        radius: 11
+        radius: 10
         color: root.hot([modelData.key]) ? Color.accent : root.dim
         border.width: 1; border.color: root.line
       }
@@ -131,15 +140,15 @@ Item {
     }
   }
 
-  // Sticks: left upper-center, right lower-center.
+  // Sticks: left upper-left, right lower-right inner.
   Repeater {
     model: [
-      { keys: ["l_x_minus", "l_x_plus", "l_y_minus", "l_y_plus", "l3"], x: 128, y: 62, cap: "L3" },
-      { keys: ["r_x_minus", "r_x_plus", "r_y_minus", "r_y_plus", "r3"], x: 164, y: 102, cap: "R3" }
+      { keys: ["l_x_minus", "l_x_plus", "l_y_minus", "l_y_plus", "l3"], cx: 96, cy: 72, cap: "L3" },
+      { keys: ["r_x_minus", "r_x_plus", "r_y_minus", "r_y_plus", "r3"], cx: 188, cy: 108, cap: "R3" }
     ]
     delegate: Item {
       required property var modelData
-      x: modelData.x; y: modelData.y
+      x: modelData.cx - 14; y: modelData.cy - 14
       width: 28; height: 28
 
       Rectangle {
@@ -163,14 +172,14 @@ Item {
     }
   }
 
-  // View / Menu pills.
+  // View / Menu pills, either side of the guide.
   Rectangle {
-    x: 132; y: 96; width: 24; height: 9; radius: 4
+    x: 128; y: 72; width: 20; height: 9; radius: 4
     color: root.hot(["select"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 164; y: 96; width: 24; height: 9; radius: 4
+    x: 172; y: 72; width: 20; height: 9; radius: 4
     color: root.hot(["start"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }

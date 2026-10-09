@@ -44,62 +44,113 @@ Item {
     return keys.indexOf(root.activeKey) >= 0
   }
 
-  // Trident: left prong, center grip, right prong.
+  // L / R shoulders, behind the top bar.
   Rectangle {
-    x: 60; y: 50; width: 44; height: 120; radius: 20
-    color: root.dim; border.width: 1; border.color: root.line
+    x: 38; y: 33; width: 44; height: 11; radius: 5
+    color: root.hot(["l"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 138; y: 40; width: 44; height: 130; radius: 20
-    color: root.dim; border.width: 1; border.color: root.line
+    x: 238; y: 33; width: 44; height: 11; radius: 5
+    color: root.hot(["r"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+  Text {
+    x: 35; y: 20; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "L"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+  Text {
+    x: 235; y: 20; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "R"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+
+  // Trident: three prongs hanging from a wide top bar. The fills are
+  // translucent, so the prongs are clipped at the bar's straight bottom
+  // edge instead of showing their tops through it.
+  Item {
+    x: 0; y: 105; width: 320; height: 85
+    clip: true
+
+    Repeater {
+      model: [
+        { x: 40, h: 92 }, { x: 134, h: 100 }, { x: 228, h: 92 }
+      ]
+      delegate: Rectangle {
+        required property var modelData
+        x: modelData.x; y: 80 - 105
+        width: 52; height: modelData.h; radius: 24
+        color: root.dim; border.width: 1; border.color: root.line
+      }
+    }
   }
   Rectangle {
-    x: 216; y: 50; width: 44; height: 120; radius: 20
-    color: root.dim; border.width: 1; border.color: root.line
-  }
-  // Top bar joining the prongs.
-  Rectangle {
-    x: 60; y: 40; width: 200; height: 34; radius: 16
+    x: 24; y: 44; width: 272; height: 62; radius: 22
     color: root.dim; border.width: 1; border.color: root.line
   }
 
-  // D-pad on the left prong.
+  // D-pad, top of the left prong.
   Rectangle {
-    x: 66; y: 100; width: 32; height: 12
+    x: 46; y: 69; width: 38; height: 13
     color: root.hot(["left", "right"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 76; y: 90; width: 12; height: 32
+    x: 58.5; y: 56.5; width: 13; height: 38
     color: root.hot(["up", "down"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
 
-  // Analog stick, center grip.
+  // Start, center of the top bar.
   Rectangle {
-    x: 138; y: 88; width: 44; height: 44; radius: 22
+    x: 147; y: 54; width: 26; height: 11; radius: 5
+    color: root.hot(["start"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+  Text {
+    x: 135; y: 66; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "Start"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+
+  // Analog stick, center prong.
+  Rectangle {
+    x: 140; y: 90; width: 40; height: 40; radius: 20
     color: root.hot(["l_x_minus", "l_x_plus", "l_y_minus", "l_y_plus"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 149; y: 99; width: 22; height: 22; radius: 11
+    x: 150; y: 100; width: 20; height: 20; radius: 10
     color: Util.alpha(Color.foreground, 0.25)
   }
   Text {
-    x: 138; y: 136; width: 44; horizontalAlignment: Text.AlignHCenter
+    x: 135; y: 132; width: 50; horizontalAlignment: Text.AlignHCenter
     text: "Stick"; color: Color.foreground; opacity: 0.6
     font.pixelSize: 9; font.family: Style.font.family
   }
 
-  // A / B on the right prong.
+  // Z trigger sits under the center prong; drawn on its lower half.
+  Rectangle {
+    x: 146; y: 150; width: 28; height: 11; radius: 5
+    color: root.hot(["l2"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+  Text {
+    x: 135; y: 162; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "Z"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+
+  // A / B, lower-left of the right side.
   Repeater {
     model: [
-      { key: "b", dy: 0, cap: "A" },
-      { key: "y", dy: 30, cap: "B" }
+      { key: "b", cx: 234, cy: 92, cap: "A" },
+      { key: "y", cx: 210, cy: 74, cap: "B" }
     ]
     delegate: Item {
       required property var modelData
-      x: 227; y: 92 + modelData.dy
+      x: modelData.cx - 11; y: modelData.cy - 11
       width: 22; height: 22
 
       Rectangle {
@@ -119,63 +170,26 @@ Item {
     }
   }
 
-  // C-buttons cluster, middle right.
+  // C-buttons diamond, upper-right.
   Repeater {
     model: [
-      { key: "r_x_plus", dx: 16, dy: 0 },
-      { key: "r_x_minus", dx: -16, dy: 0 },
-      { key: "r_y_minus", dx: 0, dy: -16 },
-      { key: "r_y_plus", dx: 0, dy: 16 }
+      { key: "r_x_plus", dx: 14, dy: 0 },
+      { key: "r_x_minus", dx: -14, dy: 0 },
+      { key: "r_y_minus", dx: 0, dy: -14 },
+      { key: "r_y_plus", dx: 0, dy: 14 }
     ]
     delegate: Rectangle {
       required property var modelData
-      x: 176 + modelData.dx - 7
-      y: 100 + modelData.dy - 7
+      x: 266 + modelData.dx - 7
+      y: 70 + modelData.dy - 7
       width: 14; height: 14; radius: 7
       color: root.hot([modelData.key]) ? Color.accent : Qt.rgba(0.9, 0.75, 0.1, 0.35)
       border.width: 1; border.color: root.line
     }
   }
   Text {
-    x: 156; y: 122; width: 64; horizontalAlignment: Text.AlignHCenter
+    x: 259; y: 64; width: 14; horizontalAlignment: Text.AlignHCenter
     text: "C"; color: Color.foreground; opacity: 0.6
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-
-  // L / R shoulders + Z trigger + Start.
-  Rectangle {
-    x: 70; y: 30; width: 34; height: 10; radius: 5
-    color: root.hot(["l"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 216; y: 30; width: 34; height: 10; radius: 5
-    color: root.hot(["r"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 70; y: 172; width: 34; height: 10; radius: 5
-    color: root.hot(["l2"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Text {
-    x: 62; y: 16; width: 50; horizontalAlignment: Text.AlignHCenter
-    text: "L"; color: Color.foreground; opacity: 0.6
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-  Text {
-    x: 208; y: 16; width: 50; horizontalAlignment: Text.AlignHCenter
-    text: "R"; color: Color.foreground; opacity: 0.6
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-  Rectangle {
-    x: 145; y: 52; width: 30; height: 12; radius: 6
-    color: root.hot(["start"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Text {
-    x: 140; y: 66; width: 40; horizontalAlignment: Text.AlignHCenter
-    text: "Start"; color: Color.foreground; opacity: 0.6
     font.pixelSize: 9; font.family: Style.font.family
   }
 }

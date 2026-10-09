@@ -32,6 +32,19 @@ Item {
     return keys.indexOf(root.activeKey) >= 0
   }
 
+  // Mode sits on the top-right shoulder (6-button pad); Start alone
+  // in the center, clear of the face buttons.
+  Rectangle {
+    x: 228; y: 42; width: 40; height: 12; radius: 6
+    color: root.hot(["select"]) ? Color.accent : root.dim
+    border.width: 1; border.color: root.line
+  }
+  Text {
+    x: 223; y: 26; width: 50; horizontalAlignment: Text.AlignHCenter
+    text: "Mode"; color: Color.foreground; opacity: 0.6
+    font.pixelSize: 9; font.family: Style.font.family
+  }
+
   // Wide rounded body.
   Rectangle {
     x: 20; y: 50; width: 280; height: 100
@@ -41,23 +54,24 @@ Item {
     border.color: root.line
   }
 
-  // D-pad (round, left).
+  // D-pad (left).
   Rectangle {
-    x: 52; y: 82; width: 52; height: 18
+    x: 52; y: 91; width: 52; height: 18
     color: root.hot(["left", "right"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 69; y: 65; width: 18; height: 52
+    x: 69; y: 74; width: 18; height: 52
     color: root.hot(["up", "down"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Rectangle {
-    x: 69; y: 82; width: 18; height: 18; radius: 9
+    x: 69; y: 91; width: 18; height: 18; radius: 9
     color: Util.alpha(Color.foreground, 0.25)
   }
 
-  // 6 face buttons: top row X Y Z, bottom row A B C.
+  // 6 face buttons: top row X Y Z, bottom row A B C (bottom row
+  // offset left, like the real pad).
   Repeater {
     model: [
       { key: "l", col: 0, row: 0, cap: "X" },
@@ -69,8 +83,8 @@ Item {
     ]
     delegate: Item {
       required property var modelData
-      x: 186 + modelData.col * 30 - 11
-      y: 76 + modelData.row * 30 - 11
+      x: 210 + modelData.col * 28 - modelData.row * 8 - 11
+      y: 84 + modelData.row * 30 - 11
       width: 22; height: 22
 
       Rectangle {
@@ -90,24 +104,14 @@ Item {
     }
   }
 
-  // Mode / Start pills.
+  // Start pill, center.
   Rectangle {
-    x: 138; y: 108; width: 30; height: 10; radius: 5
-    color: root.hot(["select"]) ? Color.accent : root.dim
-    border.width: 1; border.color: root.line
-  }
-  Rectangle {
-    x: 176; y: 108; width: 30; height: 10; radius: 5
+    x: 128; y: 112; width: 34; height: 11; radius: 5
     color: root.hot(["start"]) ? Color.accent : root.dim
     border.width: 1; border.color: root.line
   }
   Text {
-    x: 128; y: 122; width: 50; horizontalAlignment: Text.AlignHCenter
-    text: "Mode"; color: Color.foreground; opacity: 0.6
-    font.pixelSize: 9; font.family: Style.font.family
-  }
-  Text {
-    x: 166; y: 122; width: 50; horizontalAlignment: Text.AlignHCenter
+    x: 120; y: 126; width: 50; horizontalAlignment: Text.AlignHCenter
     text: "Start"; color: Color.foreground; opacity: 0.6
     font.pixelSize: 9; font.family: Style.font.family
   }
