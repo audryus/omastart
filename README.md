@@ -30,7 +30,7 @@ Press `Super + Space` (or `Super + Escape`) to confirm the traditional menu stil
 - **Search field** — filters the Apps list as you type (name, description, keywords). Keyboard focus is pulled automatically when the popup opens, even with `follow_mouse` enabled (the popup is a layer-shell window with exclusive keyboard focus, not an xdg-popup).
 - **Apps** — every installed application, grouped A–Z with section headers, real icons, launched via `gtk-launch` under `uwsm-app`.
 - **Tree** — `Learn`, `Trigger` and `Style` submenus from the Omarchy menu (default + your `~/.config/omarchy/extensions/omarchy-menu.jsonc` merged live), with drill-in navigation and a `‹` back row. Provider-backed entries (e.g. app stores, font lists) hand off to the official menu.
-- **Update row** — same checks as `omarchy.system-update` (`omarchy-update-available`), last full upgrade parsed from `/var/log/pacman.log`, and an **Update** button that runs `omarchy-update` in the floating terminal.
+- **Update row** — Omarchy release check (`omarchy-update-available`) plus a count of pending repo (`checkupdates`) and AUR (`yay -Qua`) packages and mise tools (`mise outdated`), last full upgrade parsed from `/var/log/pacman.log`, and an **Update** button that runs `omarchy-update` in the floating terminal.
 - **Places column** — folders with an icon and label. Mouse buttons are data-driven per entry in `MenuRightPane.qml` (`left`/`middle`/`right` = `fm`/`term`/`agent`, missing = do nothing):
   - left: default file manager (`xdg-open`, so nautilus, strata, flea… all respected),
   - right: default terminal in that folder (`xdg-terminal-exec --dir=`),

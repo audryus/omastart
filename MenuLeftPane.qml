@@ -82,14 +82,19 @@ Rectangle {
       : System.appRows(vals)
   }
 
-  // Same update checks as omarchy.system-update.
-  property bool updateAvailable: false
+  // omarchy-update-available only looks at the omarchy package itself, so
+  // also count pending repo (checkupdates) and AUR (yay -Qua) packages and
+  // mise tools (mise outdated), which omarchy-update upgrades too.
+  property bool updateAvailable: omarchyUpdate || pendingPackages > 0
+  property bool omarchyUpdate: false
+  property int pendingPackages: 0
   property bool updateChecked: false
   property string lastUpdate: ""
 
   function refreshUpdate() {
     if (!updateCheckProc.running) {
       root.updateChecked = false
+      updateCheckProc.collected = ""
       updateCheckProc.running = true
     }
     if (!lastUpdateProc.running) {
@@ -107,9 +112,22 @@ Rectangle {
 
   Process {
     id: updateCheckProc
-    command: ["bash", "-lc", "omarchy-update-available"]
-    onExited: function(exitCode) {
-      root.updateAvailable = exitCode === 0
+    property string collected: ""
+    // Prints "<omarchy 0|1> <pending package count>".
+    command: ["bash", "-lc",
+      "o=0; omarchy-update-available >/dev/null 2>&1 && o=1; "
+      + "n=$( { checkupdates --nocolor 2>/dev/null; "
+      + "command -v yay >/dev/null && timeout 20 yay -Qua 2>/dev/null; } | grep -c . ); "
+      + "m=0; command -v mise >/dev/null && m=$(MISE_MINIMUM_RELEASE_AGE=0 timeout 20 "
+      + "mise outdated --json 2>/dev/null | jq length 2>/dev/null); "
+      + "echo \"$o $(( ${n:-0} + ${m:-0} ))\""]
+    stdout: SplitParser {
+      onRead: function(data) { updateCheckProc.collected += data }
+    }
+    onExited: {
+      var parts = updateCheckProc.collected.trim().split(/\s+/)
+      root.omarchyUpdate = parts[0] === "1"
+      root.pendingPackages = parseInt(parts[1]) || 0
       root.updateChecked = true
     }
   }
@@ -337,7 +355,9 @@ Rectangle {
         width: parent.width
         textFormat: Text.PlainText
         text: !root.updateChecked ? "Checking updates…"
-          : (root.updateAvailable ? "Updates available" : "System up to date")
+          : !root.updateAvailable ? "System up to date"
+          : root.omarchyUpdate ? "Omarchy update available"
+          : root.pendingPackages + (root.pendingPackages === 1 ? " update available" : " updates available")
         color: root.bar ? root.bar.barForeground : Color.foreground
         font.family: Style.font.family
         font.pixelSize: Style.font.heading
