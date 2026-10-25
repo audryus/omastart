@@ -6,24 +6,63 @@ OmaStart (`audryus.omastart`) is a bar-widget start menu for the [Omarchy](https
 
 ## Install
 
-Requirements: Omarchy 4.x with its Quickshell shell running, plus `zenity` (folder picker). Optional: `mise` (uninstall screen), CUPS/`avahi` (printer discovery), RetroArch (joystick profiles).
+Requirements: Omarchy 4.x with its Quickshell shell running. Every step below is copy-paste.
+
+### 1. Dependencies
+
+```bash
+omarchy pkg add zenity                  # required: folder picker for favorites
+omarchy pkg add cups avahi retroarch    # optional: printers, printer discovery, joystick profiles
+```
+
+`mise` (used by the Uninstall screen) ships with Omarchy.
+
+### 2. Add the plugin
 
 ```bash
 omarchy plugin add https://github.com/audryus/omastart.git --enable
-omarchy plugin enable audryus.omastart left   # or pick the slot in the bar settings
-omarchy restart shell
 ```
 
-Click the new icon on the bar to open it. The original `omarchy.menu` keeps working side by side; this plugin never replaces it.
+### 3. Place it on the bar
 
-## Optional: single icon on the bar
+`--enable` adds the widget to the bar, but not necessarily where you want it. Pin it explicitly:
 
-Prefer one menu icon but keep the traditional menu fully working (keybinds and this plugin's handoffs to it)? Remove only its bar slot — the layout controls just the icon, the enabled plugin stays alive:
+```bash
+omarchy bar move audryus.omastart --section left --index 1
+```
 
-1. Edit `~/.config/omarchy/shell.json` and delete the `{ "id": "omarchy.menu" }` entry from `bar.layout` (leave `audryus.omastart` in place).
-2. Restart: `omarchy restart shell`.
+`--section` is `left`, `center` or `right`; `--index N` is the 0-based position inside that section. `--index 1` puts it right after the stock `omarchy.menu` icon. Use `--index 0` if you will hide that icon (step 4). (`omarchy bar put … --before/--after <id>` also exists, but `move --index` is deterministic.)
 
-Press `Super + Space` (or `Super + Escape`) to confirm the traditional menu still opens, with no icon on the bar. To revert, put the entry back and restart.
+### 4. Optional: hide the stock menu icon
+
+OmaStart runs **alongside** `omarchy.menu` and never replaces it: keybinds (`Super + Space`, `Super + Escape`) and this plugin's provider handoffs still go through the official menu. So **do not disable** `omarchy.menu`. Only remove its bar slot, since the layout controls just the icon:
+
+```bash
+cp ~/.config/omarchy/shell.json ~/.config/omarchy/shell.json.bak
+jq '.bar.layout |= map_values(map(select(.id != "omarchy.menu")))' \
+  ~/.config/omarchy/shell.json.bak > ~/.config/omarchy/shell.json
+omarchy bar move audryus.omastart --section left --index 0
+```
+
+Or edit `~/.config/omarchy/shell.json` by hand and delete the `{ "id": "omarchy.menu" }` entry from `bar.layout`. To revert, restore the `.bak` (or `omarchy bar put omarchy.menu --section left --index 0`).
+
+### 5. Restart and verify
+
+```bash
+omarchy restart shell
+omarchy plugin list | grep omastart                    # should say: enabled
+jq '[.bar.layout[][] | select(.id == "audryus.omastart")] | length' \
+  ~/.config/omarchy/shell.json                         # should print: 1
+```
+
+Click the new icon to open the menu. If you hid the stock icon, press `Super + Space` to confirm the traditional menu still opens.
+
+### Reinstalling or fixing a previous attempt
+
+An earlier install can leave the widget in its old slot or put it on the bar **twice**. If the count above isn't `1`, or the icon is somewhere unexpected:
+
+- open `~/.config/omarchy/shell.json` and delete the duplicate `{ "id": "audryus.omastart" }` entries from `bar.layout` (keep one),
+- run step 3 again to pin it, then step 5.
 
 ## Main menu
 
