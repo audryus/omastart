@@ -84,7 +84,9 @@ Rectangle {
 
   // omarchy-update-available only looks at the omarchy package itself, so
   // also count pending repo (checkupdates) and AUR (yay -Qua) packages and
-  // mise tools (mise outdated), which omarchy-update upgrades too.
+  // mise tools (mise outdated), which omarchy-update upgrades too. Lazy mise
+  // tools that were never installed (current == null) are skipped: mise up
+  // ignores them, so counting them would leave the row stuck.
   property bool updateAvailable: omarchyUpdate || pendingPackages > 0
   property bool omarchyUpdate: false
   property int pendingPackages: 0
@@ -119,7 +121,8 @@ Rectangle {
       + "n=$( { checkupdates --nocolor 2>/dev/null; "
       + "command -v yay >/dev/null && timeout 20 yay -Qua 2>/dev/null; } | grep -c . ); "
       + "m=0; command -v mise >/dev/null && m=$(MISE_MINIMUM_RELEASE_AGE=0 timeout 20 "
-      + "mise outdated --json 2>/dev/null | jq length 2>/dev/null); "
+      + "mise outdated --json 2>/dev/null "
+      + "| jq '[.[] | select(.current != null)] | length' 2>/dev/null); "
       + "echo \"$o $(( ${n:-0} + ${m:-0} ))\""]
     stdout: SplitParser {
       onRead: function(data) { updateCheckProc.collected += data }
