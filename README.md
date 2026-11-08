@@ -83,12 +83,13 @@ Opens from the footer (the main popup closes first). One window, left section me
 
 ![OmaStart settings window](assets/settings.png)
 
+- **General → Voxtype dictation** — on/off switch for the Voxtype daemon, which holds VRAM while running. Runs `systemctl --user enable|disable --now voxtype.service` (no password) and only appears when that unit exists.
 - **General → Favorite folders** — pick folders with a zenity dialog (same pattern as the wallweave plugin), persisted as a JSON array in `~/.local/state/omarchy/settings/omastart-favorites.json`. Each entry has a Remove button. Favorites appear in the places column after a divider, shown by basename (the full path shows in the mouse actions card on hover).
 - **Defaults** — Agent, Browser, Terminal and Editor as radio lists with a filter field. Options, visibility rules and set actions are derived at runtime from the merged menu (your overrides apply). The current default is selected; clicking an uninstalled option runs its traditional installer. State is evaluated in a single bash pass and watched live on disk.
 - **Printers** — installed CUPS printers (`lpstat`) with an Online/Offline indicator. Reachability is probed only while the page is visible (fast ticks when something is offline, slow otherwise); USB printers are matched via `lsusb`, network ones via TCP. Offline network printers get a **Refresh** button that re-discovers them over mDNS and updates a moved IP via polkit. **Find network printers** opens a discovery window (`driverless` + `_ipp`/`_ipps`/`_printer`/JetDirect mDNS, minus already-installed ones) with per-row **Install** buttons (`lpadmin` through the sudo floating terminal, `everywhere` for IPP, raw otherwise).
 - **Uninstall** — flat A–Z installed apps with a filter and per-row **Remove** (confirm dialog, then `omarchy-remove-launcher-entry`, exactly like the original menu), refreshing live via `DesktopEntries`. Below it, the obscure **preinstalls** itemized (packages, web apps, TUIs, CLI stubs — the pieces `omarchy-remove-preinstalls` handles in bulk) each with its own remover, plus a **Mise** group (`mise ls --json`, removed with `mise unuse` + `mise uninstall -a` using exact registry ids like `http:muse`).
 - **Joystick** — connected sticks from `/dev/input/js*` with USB vid:pid and product strings, a Refresh button, and per-stick **Configure**. Since clones carry no serials, identity is `vid:pid` + interface with deterministic numbering (`joysticks.json`, git-ignored), editable labels, and a shown preset (or `not configured yet`). A **Fix stock** button appears when a stock autoconfig shadows yours; **Model** installs your profile as RetroArch's.
-- **Hotkeys** — Omarchy's default binds (`/usr/share/omarchy/default/hypr/bindings/*.lua`) merged with your own, searchable by key, command and label. Customs are listed first; defaults can be overridden (and **Reset**), customs edited or removed, and **Add** opens a key-capture window that blocks bare modifiers and already-taken sequences. Saves rewrite only a managed `-- omastart hotkeys:begin/end` block in `~/.config/hypr/bindings.lua` (everything else is kept verbatim) and run `hyprctl reload`. Loop-generated binds (workspaces, panels) can't be parsed statically, so they keep working but aren't listed.
+- **Hotkeys** — every bind Hyprland has live (`hyprctl binds`, so workspaces, panels, toggles and binds from your own config all show), grouped by category with readable keys and a line saying what each one does. Commands are recovered from `/usr/share/omarchy/default/hypr/bindings/*.lua`. Search matches key, command and description in any order, and `arrows`/`scroll` find the Super + Arrows navigation. Customs are listed first; defaults can be overridden (and **Reset**), customs edited or removed, and **Add** opens a key-capture window that blocks bare modifiers and already-taken sequences. Saves rewrite only a managed `-- omastart hotkeys:begin/end` block in `~/.config/hypr/bindings.lua` (everything else is kept verbatim) and run `hyprctl reload`.
 
 ### Joystick binding → RetroArch plug-and-play
 
@@ -108,7 +109,7 @@ Opens from the footer (the main popup closes first). One window, left section me
 | `MenuRightPane.qml` | Places + favorites, per-button actions |
 | `MenuFooter.qml` | Settings + system actions |
 | `Settings.qml` | Floating settings window + section menu |
-| `General.qml` | Favorite folders |
+| `General.qml` | Voxtype on/off, favorite folders |
 | `Defaults.qml` | Default-apps radios |
 | `Printers.qml`, `Discovery.qml` | Printers + network discovery |
 | `Uninstall.qml` | Apps, preinstalls, mise removal |

@@ -6,7 +6,9 @@ import qs.Ui
 // General section of the settings window. First block: favorite folders —
 // picked with zenity (same as audryus.wallweave), persisted as a JSON array
 // by the menu root. `menu` is the BarWidget root: menu.favorites,
-// menu.addFavorite(path), menu.removeFavorite(path).
+// menu.addFavorite(path), menu.removeFavorite(path). Second block: on/off for
+// the Voxtype dictation daemon, which holds VRAM while running. It is a user
+// unit, so systemctl --user needs no password.
 Item {
   id: root
 
@@ -15,6 +17,55 @@ Item {
   // True while the zenity picker runs: the settings window drops behind
   // and releases keys so the dialog stays usable.
   readonly property bool picking: folderPickerProc.running
+
+  property bool voxtypeInstalled: false
+  property bool voxtypeOn: false
+  property string voxtypeError: ""
+  readonly property bool voxtypeBusy: voxtypeToggleProc.running
+
+  function refreshVoxtype() {
+    if (!voxtypeStateProc.running) voxtypeStateProc.running = true
+  }
+
+  function toggleVoxtype() {
+    if (root.voxtypeBusy) return
+    root.voxtypeError = ""
+    root.voxtypeOn = !root.voxtypeOn
+    voxtypeToggleProc.command = ["systemctl", "--user", root.voxtypeOn ? "enable" : "disable", "--now", "voxtype.service"]
+    voxtypeToggleProc.running = true
+  }
+
+  Process {
+    id: voxtypeStateProc
+    command: ["systemctl", "--user", "show", "voxtype.service", "-p", "LoadState", "-p", "ActiveState"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var out = String(text || "")
+        root.voxtypeInstalled = out.indexOf("LoadState=loaded") >= 0
+        if (!root.voxtypeBusy) root.voxtypeOn = /ActiveState=(active|activating)/.test(out)
+      }
+    }
+  }
+
+  Process {
+    id: voxtypeToggleProc
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        root.voxtypeError = "Could not change Voxtype (exit " + exitCode + "). Check: journalctl --user -u voxtype"
+      }
+      root.refreshVoxtype()
+    }
+  }
+
+  // Also follows changes made outside this page, and a daemon that dies.
+  Timer {
+    interval: 4000
+    running: true
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: root.refreshVoxtype()
+  }
 
   // Folder picker: zenity directory chooser, like wallweave's Library.qml.
   Process {
@@ -32,6 +83,28 @@ Item {
   Column {
     anchors.fill: parent
     spacing: Style.space(10)
+
+    Toggle {
+      width: parent.width
+      visible: root.voxtypeInstalled
+      label: "Voxtype dictation"
+      description: root.voxtypeBusy
+        ? (root.voxtypeOn ? "Turning on…" : "Turning off…")
+        : (root.voxtypeOn ? "Running. Uses VRAM while on." : "Off. Not using VRAM.")
+      checked: root.voxtypeOn
+      onClicked: root.toggleVoxtype()
+    }
+
+    Text {
+      width: parent.width
+      visible: root.voxtypeError !== ""
+      textFormat: Text.PlainText
+      text: root.voxtypeError
+      color: Color.urgent
+      font.family: Style.font.family
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.WordWrap
+    }
 
     Text {
       width: parent.width
@@ -52,7 +125,7 @@ Item {
 
     Flickable {
       width: parent.width
-      height: Math.min(favCol.implicitHeight, Style.space(300))
+      height: Math.max(0, Math.min(favCol.implicitHeight, parent.height - y))
       contentWidth: width
       contentHeight: favCol.implicitHeight
       clip: true
