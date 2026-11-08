@@ -5,8 +5,9 @@ import qs.Commons
 import qs.Ui
 import "Hotkeys.js" as HotkeysJS
 
-// Hotkeys section: omarchy defaults merged with your own binds, searchable
-// by key, command and label. Defaults can be edited (override) and reset;
+// Hotkeys section: every bind Hyprland has live, merged with your own and
+// grouped by category; searchable by key, command and description. Defaults
+// can be edited (override) and reset;
 // customs can be edited; Add opens the capture window. Saves rewrite only
 // our managed block in ~/.config/hypr/bindings.lua and reload Hyprland.
 Item {
@@ -15,8 +16,12 @@ Item {
   property string filter: ""
   readonly property string query: filter.trim().toLowerCase()
 
-  property var defaultBinds: []
+  property var liveBinds: []
+  property var fileBinds: []
+  property var configBinds: []
   property var userRows: []
+  readonly property var defaultBinds: HotkeysJS.buildDefaults(root.liveBinds, root.fileBinds, root.configBinds, root.userRows)
+  readonly property var shownRows: root.displayRows()
   property string userFileText: ""
 
   property var editing: null
@@ -58,23 +63,23 @@ Item {
       else if (!rows[i].modifiedBy) rest.push(rows[i])
     }
     rows = customs.concat(rest)
-    if (root.query === "") return rows
     var out = []
     for (var j = 0; j < rows.length; j++) {
-      var hay = [rows[j].key, rows[j].label, rows[j].action].join(" ").toLowerCase()
-      if (hay.indexOf(root.query) >= 0) out.push(rows[j])
+      if (HotkeysJS.matchesQuery(rows[j], root.query)) out.push(rows[j])
     }
-    return out
+    return HotkeysJS.groupRows(out)
   }
 
   function rebuildDefaults(text) {
-    var parsed = HotkeysJS.parseFile(text)
-    root.defaultBinds = parsed.binds
+    var parts = HotkeysJS.splitDefaultsOutput(text)
+    root.fileBinds = HotkeysJS.parseFile(parts.files).binds
+    root.liveBinds = HotkeysJS.parseLiveBinds(parts.live)
   }
 
   function rebuildUser(text) {
     root.userFileText = String(text || "")
     root.userRows = HotkeysJS.parseUserRows(root.userFileText)
+    root.configBinds = HotkeysJS.parseFile(HotkeysJS.stripManaged(root.userFileText)).binds
   }
 
   function refreshDefaults() {
@@ -162,7 +167,7 @@ Item {
   Process {
     id: defaultsProc
     property string collected: ""
-    command: ["bash", "-lc", "cat /usr/share/omarchy/default/hypr/bindings/*.lua 2>/dev/null"]
+    command: ["bash", "-c", "for f in " + root.defaultsGlob + "/*.lua; do printf '%s\\n' \"" + HotkeysJS.FILE_MARK + "$(basename \"$f\" .lua)\"; cat \"$f\"; done 2>/dev/null; echo '" + HotkeysJS.LIVE_MARK + "'; hyprctl binds 2>/dev/null"]
     stdout: SplitParser {
       onRead: function(data) { defaultsProc.collected += data + "\n" }
     }
@@ -178,11 +183,18 @@ Item {
       }
       root.status = "Saved — " + root.userRows.length + " custom binds active."
       Util.execDetached("hyprctl reload")
-      Qt.callLater(root.refresh, 500)
+      refreshTimer.restart()
     }
   }
 
   property string status: ""
+
+  // hyprctl reload is asynchronous: give it a moment before reading binds.
+  Timer {
+    id: refreshTimer
+    interval: 500
+    onTriggered: root.refresh()
+  }
 
   FileView {
     id: userFile
@@ -191,7 +203,10 @@ Item {
     printErrors: false
     onLoaded: root.rebuildUser(text())
     onLoadFailed: root.rebuildUser("")
-    onFileChanged: reload()
+    onFileChanged: {
+      reload()
+      refreshTimer.restart()
+    }
   }
 
   Component.onCompleted: root.refreshDefaults()
@@ -255,61 +270,134 @@ Item {
         spacing: Style.space(2)
 
         Repeater {
-          model: root.displayRows()
-          delegate: BorderSurface {
+          model: root.shownRows
+          delegate: Item {
+            id: rowItem
             required property var modelData
-            readonly property bool mine: modelData.source === "user" || !!modelData.modifiedBy
+            readonly property bool isHeader: modelData.header !== undefined
+            readonly property bool mine: modelData.source === "user" || modelData.origin === "config"
             width: rowsCol.width
-            height: rowCard.implicitHeight + Style.space(16)
-            radius: Style.cornerRadius
-            color: mine ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
-            borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
+            height: isHeader ? headerText.implicitHeight + Style.space(14) : rowCard.implicitHeight + Style.space(16)
 
-            Column {
-              id: rowCard
+            Text {
+              id: headerText
+              visible: rowItem.isHeader
               anchors.left: parent.left
               anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(10)
-              anchors.rightMargin: Style.space(10)
-              spacing: Style.space(8)
+              anchors.bottom: parent.bottom
+              anchors.bottomMargin: Style.space(4)
+              textFormat: Text.PlainText
+              text: rowItem.isHeader ? rowItem.modelData.header + "  ·  " + rowItem.modelData.count : ""
+              color: Color.accent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              font.bold: true
+            }
 
-              Text {
-                width: parent.width
-                textFormat: Text.PlainText
-                text: modelData.key
-                  + (modelData.label ? "  ·  " + modelData.label : "")
-                  + (modelData.source === "default" ? "" : "  ·  custom")
-                  + ((modelData.replaces || []).length > 0 ? "  ·  replaces " + modelData.replaces.join(", ") : "")
-                color: modelData.modifiedBy ? Color.accent : Color.foreground
-                font.family: Style.font.family
-                font.pixelSize: Style.font.body
-                font.weight: Font.Medium
-                elide: Text.ElideRight
-              }
+            BorderSurface {
+              visible: !rowItem.isHeader
+              anchors.fill: parent
+              radius: Style.cornerRadius
+              color: rowItem.mine ? Style.selectedFillFor(Color.foreground, Color.accent) : "transparent"
+              borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
 
-              Row {
-                width: parent.width
-                spacing: Style.space(8)
+              Column {
+                id: rowCard
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(6)
 
-                Button {
-                  text: "Edit"
-                  bordered: true
-                  onClicked: root.openEdit(modelData)
+                Item {
+                  width: parent.width
+                  height: Math.max(caps.implicitHeight, actions.implicitHeight)
+
+                  Flow {
+                    id: caps
+                    anchors.left: parent.left
+                    anchors.right: actions.left
+                    anchors.rightMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(4)
+
+                    Repeater {
+                      model: rowItem.isHeader ? [] : HotkeysJS.keyCaps(rowItem.modelData.key)
+                      delegate: Rectangle {
+                        required property string modelData
+                        width: capText.implicitWidth + Style.space(12)
+                        height: capText.implicitHeight + Style.space(4)
+                        radius: Style.cornerRadius
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Qt.alpha(Color.foreground, 0.35)
+
+                        Text {
+                          id: capText
+                          anchors.centerIn: parent
+                          textFormat: Text.PlainText
+                          text: parent.modelData
+                          color: Color.foreground
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          font.weight: Font.Medium
+                        }
+                      }
+                    }
+                  }
+
+                  Row {
+                    id: actions
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(6)
+
+                    Button {
+                      text: "Edit"
+                      bordered: true
+                      onClicked: root.openEdit(rowItem.modelData)
+                    }
+
+                    Button {
+                      visible: (rowItem.modelData.replaces || []).length > 0
+                      text: "Reset"
+                      bordered: true
+                      onClicked: root.resetDefault({ key: (rowItem.modelData.replaces || [])[0] })
+                    }
+
+                    Button {
+                      visible: rowItem.modelData.source === "user" && (rowItem.modelData.replaces || []).length === 0
+                      text: "Remove"
+                      bordered: true
+                      onClicked: root.removeCustom(rowItem.modelData)
+                    }
+                  }
                 }
 
-                Button {
-                  visible: (modelData.replaces || []).length > 0
-                  text: "Reset"
-                  bordered: true
-                  onClicked: root.resetDefault({ key: (modelData.replaces || [])[0] })
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: rowItem.isHeader ? "" : (rowItem.modelData.label || "No description")
+                  color: Color.foreground
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.weight: Font.Medium
+                  wrapMode: Text.WordWrap
                 }
 
-                Button {
-                  visible: modelData.source === "user" && (modelData.replaces || []).length === 0
-                  text: "Remove"
-                  bordered: true
-                  onClicked: root.removeCustom(modelData)
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: rowItem.isHeader ? "" : HotkeysJS.describeAction(rowItem.modelData)
+                    + ((rowItem.modelData.replaces || []).length > 0 ? "  ·  replaces " + rowItem.modelData.replaces.join(", ") : "")
+                  color: Color.foreground
+                  opacity: 0.6
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WrapAnywhere
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
                 }
               }
             }
@@ -317,7 +405,7 @@ Item {
         }
 
         Text {
-          visible: rowsCol.implicitHeight === 0
+          visible: root.shownRows.length === 0
           width: parent.width
           textFormat: Text.PlainText
           text: "No hotkeys match."

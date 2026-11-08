@@ -228,7 +228,7 @@ Item {
         Text {
           width: parent.width
           textFormat: Text.PlainText
-          text: "Label"
+          text: "Description"
           color: Color.foreground
           opacity: 0.6
           font.family: Style.font.family
@@ -239,7 +239,7 @@ Item {
         TextField {
           width: parent.width
           text: root.label
-          placeholderText: "e.g. Omastart"
+          placeholderText: "What it does, e.g. Open the start menu"
           onTextEdited: root.label = text
         }
 
@@ -291,7 +291,7 @@ Item {
             id: saveButton
             text: "Save"
             bordered: true
-            enabled: root.seq !== "" && root.label.trim() !== "" && !root.duplicate && !HotkeysJS.isBareMod(root.normSeq)
+            enabled: root.seq !== "" && root.label.trim() !== "" && root.command.trim() !== "" && !root.duplicate && !HotkeysJS.isBareMod(root.normSeq)
             onClicked: {
               var kind = root.commandKind
               if (root.editing && root.command === String(root.editing.action || "")) kind = String(root.editing.actionKind || "string")
